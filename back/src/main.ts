@@ -10,7 +10,9 @@ async function bootstrap() {
       'http://localhost:5173',
       'http://localhost:4173',
       'http://localhost:3001',
-    ],
+      // Producción — agregar tu dominio real de Vercel aquí
+      process.env.FRONTEND_URL,
+    ].filter(Boolean) as string[],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,

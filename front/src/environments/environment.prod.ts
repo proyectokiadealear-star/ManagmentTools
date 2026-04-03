@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  apiUrl: process.env.VITE_API_URL || '',
+  apiUrl: import.meta.env.VITE_API_URL || '',
 };
