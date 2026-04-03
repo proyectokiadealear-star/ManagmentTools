@@ -1,14 +1,30 @@
-import { useState } from 'react';
-import { FlaskConical, AlertTriangle, PlusCircle, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { FlaskConical, AlertTriangle, PlusCircle, X, Loader2 } from 'lucide-react';
 import { useRole } from '@shared/context/AssetContext';
 import { computeStats } from '@shared/utils/stats';
-import { ConsumoInsumo, CategoriaInsumo, mockConsumos } from '../../data/mockData';
+import { Pagination } from '@shared/components';
+import { usePagination } from '@shared/hooks/usePagination';
+import { getConsumos, createConsumo } from '../../services/consumablesService';
+import type { ConsumoInsumo, CategoriaInsumo } from '../../services/consumablesService';
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export function MaterialConsumption() {
   const role = useRole();
-  const [consumos, setConsumos] = useState<ConsumoInsumo[]>(mockConsumos);
+  const [consumos, setConsumos] = useState<ConsumoInsumo[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getConsumos().then(data => {
+      if (!cancelled) {
+        setConsumos(data);
+        setLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, []);
   const [periodoVista, setPeriodoVista] = useState<'semanal' | 'mensual'>('mensual');
 
   // Form state — F11.1
@@ -28,6 +44,11 @@ export function MaterialConsumption() {
   const sortedConsumos = [...consumos].sort(
     (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
   );
+
+  const {
+    paginatedItems: pageConsumos,
+    currentPage, pageSize, setCurrentPage, setPageSize, totalItems: totalConsumos,
+  } = usePagination(sortedConsumos, 10);
 
   // ── F11.2 — Efficiency dashboard ─────────────────────────────────────────
 
@@ -150,15 +171,16 @@ export function MaterialConsumption() {
     return Object.keys(errors).length === 0;
   }
 
-  function handleSave() {
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
     if (!validateForm()) return;
 
     const cantidad = Number(form.cantidad);
     const costoUnitario = Number(form.costoUnitario);
     const costoTotal = cantidad * costoUnitario;
 
-    const newConsumo: ConsumoInsumo = {
-      id: `CI-${String(consumos.length + 1).padStart(3, '0')}`,
+    const payload: Omit<ConsumoInsumo, 'id'> = {
       ordenTrabajo: form.ordenTrabajo.trim(),
       tecnico: role === 'jefe' ? 'Jefe de Taller' : role === 'tecnico' ? 'Técnico' : 'Personal',
       fecha: new Date().toISOString().split('T')[0],
@@ -170,17 +192,25 @@ export function MaterialConsumption() {
       costoTotal,
     };
 
-    setConsumos(prev => [...prev, newConsumo]);
-    setShowFormModal(false);
-    setForm({
-      ordenTrabajo: '',
-      insumo: '',
-      categoria: '',
-      cantidad: '',
-      unidad: 'litros',
-      costoUnitario: '',
-    });
-    setFormErrors({});
+    setSaving(true);
+    try {
+      const created = await createConsumo(payload);
+      setConsumos(prev => [...prev, created]);
+      setShowFormModal(false);
+      setForm({
+        ordenTrabajo: '',
+        insumo: '',
+        categoria: '',
+        cantidad: '',
+        unidad: 'litros',
+        costoUnitario: '',
+      });
+      setFormErrors({});
+    } catch (err) {
+      console.error('[MaterialConsumption] Error al guardar consumo:', err);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleCloseModal() {
@@ -205,6 +235,15 @@ export function MaterialConsumption() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Loading skeleton */}
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-20 gap-3">
+          <Loader2 className="h-8 w-8 text-amber-500 animate-spin" />
+          <p className="text-sm text-gray-500">Cargando consumos de insumos...</p>
+        </div>
+      )}
+
+      {!loading && <>
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
@@ -394,7 +433,7 @@ export function MaterialConsumption() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {sortedConsumos.map(c => {
+              {pageConsumos.map(c => {
                 const isAnomaly = c.observacion?.includes('ANOMALÍA');
                 return (
                   <tr
@@ -430,6 +469,15 @@ export function MaterialConsumption() {
               })}
             </tbody>
           </table>
+        </div>
+        <div className="px-4 py-3 border-t border-gray-100">
+          <Pagination
+            currentPage={currentPage}
+            totalItems={totalConsumos}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       </section>
 
@@ -605,14 +653,17 @@ export function MaterialConsumption() {
               </button>
               <button
                 onClick={handleSave}
-                className="px-5 py-2 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors"
+                disabled={saving}
+                className="px-5 py-2 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                Guardar Registro
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {saving ? 'Guardando...' : 'Guardar Registro'}
               </button>
             </div>
           </div>
         </div>
       )}
+      </>}
     </div>
   );
 }

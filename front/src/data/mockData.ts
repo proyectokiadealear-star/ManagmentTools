@@ -1,3 +1,5 @@
+import { AreaTaller } from '../shared/types/enums';
+
 export interface CustodyTransfer {
   id: string;
   assetId: string;
@@ -18,18 +20,18 @@ export interface Asset {
   placa: string;
   proveedor: string;
   factura: string;
-  fechaCompra: string; // Intentional bad format for some: '28-oct-22'
+  fechaCompra: string;
   valor: number;
-  ubicacion: string; // Free text
-  area?: string; // Structured (Target) — Nivel 1
-  bahia?: string; // Structured (Target) — Nivel 2
-  rack?: string; // Structured (Target) — Nivel 3
-  caja?: string; // Structured (Target) — Nivel 4 (Caja personal / Posición final)
-  responsable: string; // Role
-  custodio: string; // Person
-  encargado: string; // Person (Duplicate concept)
+  ubicacion: string;
+  area?: AreaTaller;
+  bahia?: string;
+  rack?: string;
+  caja?: string;
+  responsable: string;
+  custodio: string;
+  encargado: string;
   estado: 'Activo' | 'En Reparación' | 'Dado de Baja';
-  vidaUtil: number; // Years
+  vidaUtil: number;
   observacion: string;
   comentario: string;
   itemProveedor: string;
@@ -45,240 +47,6 @@ export interface DataQualityIssue {
   ejemplos: string;
   severidad: 'Alta' | 'Media' | 'Baja';
 }
-
-export const mockAssets: Asset[] = [
-{
-  id: 'A001',
-  codigo: 'SUR-HER-001',
-  descripcion: 'Scanner Automotriz GDS',
-  tipo: 'Equipo',
-  marca: 'KIA',
-  modelo: 'GDS Mobile',
-  serial: 'GDS-2022-8472',
-  placa: 'ACT-0045',
-  proveedor: 'AEKIA S.A.',
-  factura: 'F-001-452',
-  fechaCompra: '28-oct-22',
-  valor: 2500.0,
-  ubicacion: 'TALLER MECÁNICA - ZONA DIAGNÓSTICO',
-  area: 'Taller',
-  bahia: 'Diagnóstico',
-  rack: 'Estación 1',
-  caja: 'Mesa de Trabajo - C. Mendoza',
-  responsable: 'Jefe de Taller',
-  custodio: 'Carlos Mendoza',
-  encargado: 'Carlos Mendoza',
-  estado: 'Activo',
-  vidaUtil: 5,
-  observacion: 'Requiere actualización anual',
-  comentario: 'Actualizado en Enero',
-  itemProveedor: 'K-GDS-01',
-  capacidadEspecificacion: 'OBD2 / CAN BUS',
-  periodicidad: 'Anual',
-  imagenUrl:
-  'https://images.unsplash.com/photo-1635425896336-12158652614a?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60'
-},
-{
-  id: 'A002',
-  codigo: 'SUR-TAB-012',
-  descripcion: 'Tablet Recepción de Vehículos',
-  tipo: 'Tablet',
-  marca: 'Samsung',
-  modelo: 'Galaxy Tab Active3',
-  serial: 'SM-T575-992',
-  placa: 'ACT-0089',
-  proveedor: 'Samsung Electronics',
-  factura: '002-001-9982',
-  fechaCompra: '15-mar-23',
-  valor: 450.0,
-  ubicacion: 'RECEPCIÓN ASESORES',
-  area: 'Recepción',
-  bahia: 'Atención al Cliente',
-  rack: 'Módulo 3',
-  caja: 'Escritorio Asesor 3',
-  responsable: 'Jefe de Servicio',
-  custodio: 'Ana Torres',
-  encargado: 'Ana T.',
-  estado: 'Activo',
-  vidaUtil: 3,
-  observacion: 'Funda protectora desgastada',
-  comentario: '',
-  itemProveedor: 'SM-T575NZKALPE',
-  capacidadEspecificacion: '64GB, Rugged',
-  periodicidad: 'N/A',
-  imagenUrl:
-  'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60'
-},
-{
-  id: 'A003',
-  codigo: 'SUR-HER-045',
-  descripcion: 'Torquímetro Digital 1/2"',
-  tipo: 'Herramienta',
-  marca: 'Snap-on',
-  modelo: 'ATECH3FR250B',
-  serial: 'SN-88372',
-  placa: 'ACT-0102',
-  proveedor: 'Snap-on Tools',
-  factura: 'INV-8823',
-  fechaCompra: '10-ene-21',
-  valor: 650.0,
-  ubicacion: 'BODEGA DE REPUESTOS',
-  area: 'Bodega',
-  bahia: 'Herramientas Especiales',
-  rack: 'Estante B, Nivel 2',
-  caja: 'Estante B-2 / Caja Herr.',
-  responsable: 'Jefe de Repuestos',
-  custodio: 'Bodeguero / Repuestos SURMOTOR',
-  encargado: 'Luis Pérez',
-  estado: 'En Reparación',
-  vidaUtil: 10,
-  observacion: 'Falla en display',
-  comentario: 'Enviado a calibración',
-  itemProveedor: 'ATECH3FR250B',
-  capacidadEspecificacion: '12.5-250 ft-lb',
-  periodicidad: 'conf. indique Marca KIA',
-  imagenUrl:
-  'https://images.unsplash.com/photo-1530825894095-9c184b068fcb?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60'
-},
-{
-  id: 'A004',
-  codigo: 'SUR-CON-008',
-  descripcion: 'Conector EV Batería Alta Tensión',
-  tipo: 'Conector',
-  marca: 'KIA',
-  modelo: 'EV6-CONN-01',
-  serial: 'S/N',
-  placa: 'S/P',
-  proveedor: 'AEKIA S.A', // Notice the missing period for data quality demo
-  factura: 'F-001-882',
-  fechaCompra: '05-nov-23',
-  valor: 120.0,
-  ubicacion: 'BODEGA HERRAMIENTAS EV',
-  area: 'Bodega',
-  bahia: 'Vehículos Eléctricos',
-  rack: 'Armario EV-1',
-  caja: 'Armario EV-1 / Slot A',
-  responsable: 'Jefe de Taller',
-  custodio: 'Roberto Gómez',
-  encargado: 'Roberto G.',
-  estado: 'Activo',
-  vidaUtil: 2,
-  observacion: 'Uso exclusivo EV6',
-  comentario: '',
-  itemProveedor: 'K-EV-CON',
-  capacidadEspecificacion: '800V',
-  periodicidad: 'Revisión mensual'
-},
-{
-  id: 'A005',
-  codigo: 'SUR-EQU-022',
-  descripcion: 'Alineadora 3D',
-  tipo: 'Equipo',
-  marca: 'Hunter',
-  modelo: 'HawkEye Elite',
-  serial: 'HE-2020-554',
-  placa: 'ACT-0012',
-  proveedor: 'Equipos Automotrices Cia Ltda',
-  factura: '001-002-000456',
-  fechaCompra: '12-feb-20',
-  valor: 18500.0,
-  ubicacion: 'TALLER MECÁNICA - ALINEACIÓN',
-  area: 'Taller',
-  bahia: 'Alineación y Balanceo',
-  rack: 'Foso 1',
-  caja: 'Foso 1 / Plataforma',
-  responsable: 'Jefe de Taller',
-  custodio: 'Miguel Sánchez',
-  encargado: 'Miguel Sánchez',
-  estado: 'Activo',
-  vidaUtil: 8,
-  observacion: 'Mantenimiento preventivo al día',
-  comentario: 'Sensores calibrados',
-  itemProveedor: 'HE-ELITE-3D',
-  capacidadEspecificacion: 'Vehículos livianos y pesados',
-  periodicidad: 'Semestral'
-}];
-
-
-export const mockTransfers: CustodyTransfer[] = [
-{
-  id: 'TR-001',
-  assetId: 'A003',
-  fromCustodio: 'Luis Pérez',
-  toCustodio: 'Bodeguero / Repuestos SURMOTOR',
-  fecha: '2023-10-15',
-  autorizadoPor: 'Jefe de Repuestos'
-},
-{
-  id: 'TR-002',
-  assetId: 'A001',
-  fromCustodio: 'Bodega Central',
-  toCustodio: 'Carlos Mendoza',
-  fecha: '2022-11-01',
-  autorizadoPor: 'Gerente de Sucursal'
-},
-{
-  id: 'TR-003',
-  assetId: 'A002',
-  fromCustodio: 'Soporte IT',
-  toCustodio: 'Ana Torres',
-  fecha: '2023-03-16',
-  autorizadoPor: 'Jefe de Servicio'
-}];
-
-
-export const dataQualityIssues: DataQualityIssue[] = [
-{
-  campo: 'Observación + Comentario + Observaciones',
-  problema: '3 campos para la misma función',
-  impacto:
-  'Información duplicada o dispersa. Dificulta la lectura rápida del estado del activo.',
-  ejemplos:
-  'Observación: "Falla en display" | Comentario: "Enviado a calibración"',
-  severidad: 'Media'
-},
-{
-  campo: 'Responsable + Custodio + Encargado 1',
-  problema: 'Mezclan rol y persona',
-  impacto:
-  'No se puede saber quién es responsable legal vs quién lo tiene físicamente. Impide auditorías claras.',
-  ejemplos:
-  'Responsable: "Jefe de Repuestos" | Custodio: "Bodeguero / Repuestos SURMOTOR" | Encargado: "Luis Pérez"',
-  severidad: 'Alta'
-},
-{
-  campo: 'Ubicación',
-  problema: 'Texto libre sin estructura',
-  impacto:
-  'Imposible filtrar por zona o área. Dificulta la toma de inventario físico.',
-  ejemplos: '"BODEGA DE REPUESTOS", "TALLER MECÁNICA - ZONA DIAGNÓSTICO"',
-  severidad: 'Alta'
-},
-{
-  campo: 'Fecha',
-  problema: 'Formato "28-oct-22"',
-  impacto:
-  'No es parseable como DATE en ningún motor de BD. Impide calcular depreciación automáticamente.',
-  ejemplos: '"28-oct-22", "15-mar-23"',
-  severidad: 'Alta'
-},
-{
-  campo: 'Proveedor',
-  problema: 'Inconsistencias tipográficas',
-  impacto:
-  'Duplica proveedores en reportes agrupados. Afecta la trazabilidad de costos.',
-  ejemplos: '"AEKIA S.A." vs "AEKIA S.A"',
-  severidad: 'Media'
-},
-{
-  campo: 'Periodicidad',
-  problema: 'Texto descriptivo en campo de frecuencia',
-  impacto:
-  'No es un valor calculable ni alertable para mantenimientos programados.',
-  ejemplos: '"conf. indique Marca KIA", "N/A"',
-  severidad: 'Baja'
-}];
-
 
 export interface Proforma {
   id: string;
@@ -311,7 +79,6 @@ export interface WishlistItem {
 
 export type SemaforoEstado = 'verde' | 'amarillo' | 'rojo';
 
-// Proforma para servicios (reparaciones y mantenimientos) — distinta de Proforma de compras
 export interface ProformaServicio {
   id: string;
   proveedor: string;
@@ -328,34 +95,34 @@ export interface ProformaServicio {
   validezDias: number;
   condiciones: string;
   seleccionada: boolean;
-  documentoUrl?: string; // URL simulada del PDF de la proforma
+  documentoUrl?: string;
 }
 
 export interface MantenimientoPreventivo {
   id: string;
   assetId: string;
   assetDescripcion: string;
-  tipo: string;               // Preventivo / Predictivo
+  tipo: string;
   periodicidad: 'Mensual' | 'Trimestral' | 'Semestral' | 'Anual';
-  ultimoMantenimiento: string; // ISO date
-  proximoMantenimiento: string; // ISO date
+  ultimoMantenimiento: string;
+  proximoMantenimiento: string;
   responsable: string;
-  estado: SemaforoEstado;     // calculado en base a días restantes
+  estado: SemaforoEstado;
   diasRestantes: number;
   observacion?: string;
   ejecutado: boolean;
   proformas: ProformaServicio[];
-  firmaDocumentoUrl?: string; // URL simulada del documento de autorización firmado
+  firmaDocumentoUrl?: string;
 }
 
 export interface FallaCorrectiva {
   id: string;
   assetId: string;
   assetDescripcion: string;
-  fechaFalla: string;          // ISO date
+  fechaFalla: string;
   descripcionFalla: string;
   tipoCausa: 'Eléctrica' | 'Mecánica' | 'Software' | 'Desgaste' | 'Accidente';
-  tiempoParada: number;        // horas
+  tiempoParada: number;
   fechaSolicitudAutorizacion: string;
   fechaAutorizacion: string | null;
   horasEsperaAutorizacion: number | null;
@@ -363,14 +130,12 @@ export interface FallaCorrectiva {
   proveedor: string;
   tecnico: string;
   estado: 'Pendiente Autorización' | 'En Reparación' | 'Resuelto';
-  evidenciaFoto?: string;     // URL
+  evidenciaFoto?: string;
   solucion?: string;
   proformas: ProformaServicio[];
-  firmaDocumentoUrl?: string; // URL simulada del documento de autorización firmado
+  firmaDocumentoUrl?: string;
 }
 
-// Registro de cotización creado por el Jefe de Taller
-// Vincula un activo + tipo de trabajo + las proformas que el jefe cargó
 export type TipoCotizacion = 'Correctivo' | 'Preventivo' | 'Correctivo y Preventivo';
 
 export interface CotizacionRegistro {
@@ -379,183 +144,13 @@ export interface CotizacionRegistro {
   assetDescripcion: string;
   tipo: TipoCotizacion;
   descripcionTrabajo: string;
-  fechaRegistro: string;       // ISO date
+  fechaRegistro: string;
   creadoPor: string;
   proformas: ProformaServicio[];
-  estado: 'Borrador' | 'Completa' | 'Aprobada';  // Completa = ≥3 proformas, Aprobada = se eligió ganadora
-  fallaId?: string;             // Opcional: vinculada a una falla correctiva
-  mantenimientoId?: string;     // Opcional: vinculada a un mantenimiento preventivo
+  estado: 'Borrador' | 'Completa' | 'Aprobada';
+  fallaId?: string;
+  mantenimientoId?: string;
 }
-
-export const mockCotizaciones: CotizacionRegistro[] = [];
-
-export const mockMantenimientos: MantenimientoPreventivo[] = [
-  {
-    id: 'MP001',
-    assetId: 'A001',
-    assetDescripcion: 'Scanner Automotriz GDS',
-    tipo: 'Preventivo',
-    periodicidad: 'Anual',
-    ultimoMantenimiento: '2024-01-15',
-    proximoMantenimiento: '2025-01-15',
-    responsable: 'Carlos Mendoza',
-    estado: 'rojo',
-    diasRestantes: -72,
-    observacion: 'Requiere actualización de software KIA',
-    ejecutado: false,
-    proformas: [],
-  },
-  {
-    id: 'MP002',
-    assetId: 'A005',
-    assetDescripcion: 'Alineadora 3D HawkEye',
-    tipo: 'Preventivo',
-    periodicidad: 'Semestral',
-    ultimoMantenimiento: '2024-09-01',
-    proximoMantenimiento: '2025-03-01',
-    responsable: 'Miguel Sánchez',
-    estado: 'amarillo',
-    diasRestantes: 18,
-    observacion: 'Calibrar sensores de alineación',
-    ejecutado: false,
-    proformas: [],
-  },
-  {
-    id: 'MP003',
-    assetId: 'A002',
-    assetDescripcion: 'Tablet Recepción de Vehículos',
-    tipo: 'Preventivo',
-    periodicidad: 'Anual',
-    ultimoMantenimiento: '2024-03-15',
-    proximoMantenimiento: '2025-03-15',
-    responsable: 'Ana Torres',
-    estado: 'verde',
-    diasRestantes: 32,
-    observacion: 'Revisar funda protectora y batería',
-    ejecutado: false,
-    proformas: [],
-  },
-  {
-    id: 'MP004',
-    assetId: 'A004',
-    assetDescripcion: 'Conector EV Batería Alta Tensión',
-    tipo: 'Predictivo',
-    periodicidad: 'Mensual',
-    ultimoMantenimiento: '2024-12-01',
-    proximoMantenimiento: '2025-01-01',
-    responsable: 'Roberto Gómez',
-    estado: 'rojo',
-    diasRestantes: -55,
-    observacion: 'Inspección visual de conectores y aislamiento',
-    ejecutado: false,
-    proformas: [],
-  },
-  {
-    id: 'MP005',
-    assetId: 'A003',
-    assetDescripcion: 'Torquímetro Digital 1/2"',
-    tipo: 'Preventivo',
-    periodicidad: 'Semestral',
-    ultimoMantenimiento: '2024-07-20',
-    proximoMantenimiento: '2025-01-20',
-    responsable: 'Luis Pérez',
-    estado: 'rojo',
-    diasRestantes: -36,
-    observacion: 'Calibración según norma KIA',
-    ejecutado: false,
-    proformas: [],
-  },
-  {
-    id: 'MP006',
-    assetId: 'A005',
-    assetDescripcion: 'Alineadora 3D HawkEye',
-    tipo: 'Preventivo',
-    periodicidad: 'Trimestral',
-    ultimoMantenimiento: '2024-11-15',
-    proximoMantenimiento: '2025-02-15',
-    responsable: 'Miguel Sánchez',
-    estado: 'amarillo',
-    diasRestantes: 12,
-    ejecutado: false,
-    proformas: [],
-  },
-];
-
-export const mockFallasCorrectivas: FallaCorrectiva[] = [
-  {
-    id: 'FC001',
-    assetId: 'A003',
-    assetDescripcion: 'Torquímetro Digital 1/2"',
-    fechaFalla: '2024-10-12',
-    descripcionFalla: 'Display dejó de funcionar tras caída accidental desde mesa de trabajo. El equipo no responde al encendido.',
-    tipoCausa: 'Accidente',
-    tiempoParada: 168,
-    fechaSolicitudAutorizacion: '2024-10-12',
-    fechaAutorizacion: '2024-10-15',
-    horasEsperaAutorizacion: 72,
-    costoReparacion: 180,
-    proveedor: 'Snap-on Service Center',
-    tecnico: 'Luis Pérez',
-    estado: 'Resuelto',
-    evidenciaFoto: 'https://images.unsplash.com/photo-1530825894095-9c184b068fcb?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60',
-    solucion: 'Reemplazo de módulo de display. Calibración post-reparación completada.',
-    proformas: [],
-  },
-  {
-    id: 'FC002',
-    assetId: 'A001',
-    assetDescripcion: 'Scanner Automotriz GDS',
-    fechaFalla: '2025-01-20',
-    descripcionFalla: 'Error de comunicación CAN BUS al conectar con vehículos EV6. El scanner no reconoce el protocolo de diagnóstico.',
-    tipoCausa: 'Software',
-    tiempoParada: 24,
-    fechaSolicitudAutorizacion: '2025-01-20',
-    fechaAutorizacion: '2025-01-21',
-    horasEsperaAutorizacion: 14,
-    costoReparacion: 0,
-    proveedor: 'AEKIA S.A. - Soporte Técnico',
-    tecnico: 'Carlos Mendoza',
-    estado: 'Resuelto',
-    solucion: 'Actualización de firmware a versión 2.8.1 y reseteo de configuración de protocolos.',
-    proformas: [],
-  },
-  {
-    id: 'FC003',
-    assetId: 'A005',
-    assetDescripcion: 'Alineadora 3D HawkEye',
-    fechaFalla: '2025-02-05',
-    descripcionFalla: 'Sensor delantero izquierdo presenta lecturas inconsistentes (±3mm de error). Los resultados de alineación no son confiables.',
-    tipoCausa: 'Mecánica',
-    tiempoParada: 48,
-    fechaSolicitudAutorizacion: '2025-02-05',
-    fechaAutorizacion: null,
-    horasEsperaAutorizacion: null,
-    costoReparacion: 950,
-    proveedor: 'Equipos Automotrices Cia Ltda',
-    tecnico: 'Miguel Sánchez',
-    estado: 'Pendiente Autorización',
-    evidenciaFoto: 'https://images.unsplash.com/photo-1635425896336-12158652614a?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60',
-    proformas: [],
-  },
-  {
-    id: 'FC004',
-    assetId: 'A004',
-    assetDescripcion: 'Conector EV Batería Alta Tensión',
-    fechaFalla: '2025-01-08',
-    descripcionFalla: 'Desgaste visible en los pines de contacto del conector principal. Riesgo de arco eléctrico detectado durante inspección de seguridad.',
-    tipoCausa: 'Desgaste',
-    tiempoParada: 6,
-    fechaSolicitudAutorizacion: '2025-01-08',
-    fechaAutorizacion: '2025-01-10',
-    horasEsperaAutorizacion: 48,
-    costoReparacion: 320,
-    proveedor: 'AEKIA S.A.',
-    tecnico: 'Roberto Gómez',
-    estado: 'Resuelto',
-    solucion: 'Reemplazo de kit de pines y recubrimiento dieléctrico. Prueba de aislamiento aprobada.',
-    proformas: [],
-  },
-];
 
 // ─── PILAR 3: Control Riguroso ─────────────────────────────────────────────
 
@@ -567,16 +162,16 @@ export interface SolicitudPrestamo {
   assetId: string;
   assetDescripcion: string;
   assetPlaca: string;
-  solicitante: string;           // Personal de Taller
-  ordenTrabajo: string;          // OT relacionada
+  solicitante: string;
+  ordenTrabajo: string;
   motivoUso: string;
-  fechaSolicitud: string;        // ISO datetime
-  fechaAprobacion?: string;      // ISO datetime
-  aprobadoPor?: string;          // Técnico Líder
-  firmaDigital?: string;         // Simulado: nombre + timestamp
-  fechaSalida?: string;          // ISO datetime
-  fechaDevolucionEstimada: string; // ISO date
-  fechaDevolucionReal?: string;  // ISO datetime
+  fechaSolicitud: string;
+  fechaAprobacion?: string;
+  aprobadoPor?: string;
+  firmaDigital?: string;
+  fechaSalida?: string;
+  fechaDevolucionEstimada: string;
+  fechaDevolucionReal?: string;
   estadoDevolucion?: EstadoDevolucion;
   fotoDevolucionUrl?: string;
   observacionDevolucion?: string;
@@ -586,13 +181,13 @@ export interface SolicitudPrestamo {
 
 export interface InspeccionFotografica {
   id: string;
-  tecnico: string;               // Propietario de la caja
-  inspeccionadoPor: string;      // Técnico Líder que inspecciona
-  fechaInspeccion: string;       // ISO date
-  ubicacion: string;             // Área / Bahía
+  tecnico: string;
+  inspeccionadoPor: string;
+  fechaInspeccion: string;
+  ubicacion: string;
   fotoActualUrl: string;
-  fotoBaseUrl?: string;          // Foto de referencia para comparación
-  discrepancias: string[];       // Lista de ítems faltantes/dañados detectados
+  fotoBaseUrl?: string;
+  discrepancias: string[];
   tieneDiscrepancias: boolean;
   reporteGenerado: boolean;
   observaciones?: string;
@@ -603,256 +198,17 @@ export interface ActaDevolucion {
   solicitudPrestamoId: string;
   assetId: string;
   assetDescripcion: string;
-  tecnico: string;               // Quien devuelve
-  firmadoPor: string;            // Firma del técnico (simulado)
-  fechaEmision: string;          // ISO datetime
-  condiciones: string;           // Texto del acta
+  tecnico: string;
+  firmadoPor: string;
+  fechaEmision: string;
+  condiciones: string;
   estadoAlDevolver: EstadoDevolucion;
   fotoEvidenciaUrl?: string;
   requiereDescuento: boolean;
-  valorReposicion?: number;      // Calculado sobre valor depreciado
+  valorReposicion?: number;
   documentoNominaGenerado: boolean;
   observaciones?: string;
 }
-
-export const mockPrestamos: SolicitudPrestamo[] = [
-  {
-    id: 'PR-001',
-    assetId: 'A001',
-    assetDescripcion: 'Scanner Automotriz GDS',
-    assetPlaca: 'ACT-0045',
-    solicitante: 'Pedro Alvarado',
-    ordenTrabajo: 'OT-2025-0142',
-    motivoUso: 'Diagnóstico falla EV6 — comunicación CAN BUS',
-    fechaSolicitud: '2025-03-10T08:30:00',
-    fechaAprobacion: '2025-03-10T08:45:00',
-    aprobadoPor: 'Carlos Mendoza',
-    firmaDigital: 'Carlos Mendoza — 2025-03-10 08:45',
-    fechaSalida: '2025-03-10T09:00:00',
-    fechaDevolucionEstimada: '2025-03-10',
-    fechaDevolucionReal: '2025-03-10T17:30:00',
-    estadoDevolucion: 'Usada Normal',
-    observacionDevolucion: 'Sin novedad',
-    estado: 'Devuelto',
-  },
-  {
-    id: 'PR-002',
-    assetId: 'A003',
-    assetDescripcion: 'Torquímetro Digital 1/2"',
-    assetPlaca: 'ACT-0102',
-    solicitante: 'Juan Morales',
-    ordenTrabajo: 'OT-2025-0198',
-    motivoUso: 'Apriete de culata motor Sportage',
-    fechaSolicitud: '2025-03-15T10:00:00',
-    fechaAprobacion: '2025-03-15T10:10:00',
-    aprobadoPor: 'Carlos Mendoza',
-    firmaDigital: 'Carlos Mendoza — 2025-03-15 10:10',
-    fechaSalida: '2025-03-15T10:15:00',
-    fechaDevolucionEstimada: '2025-03-15',
-    estado: 'Vencido',
-  },
-  {
-    id: 'PR-003',
-    assetId: 'A004',
-    assetDescripcion: 'Conector EV Batería Alta Tensión',
-    assetPlaca: 'S/P',
-    solicitante: 'Roberto Gómez',
-    ordenTrabajo: 'OT-2025-0201',
-    motivoUso: 'Diagnóstico batería EV6 alta tensión',
-    fechaSolicitud: '2025-03-20T14:00:00',
-    fechaDevolucionEstimada: '2025-03-20',
-    estado: 'Pendiente',
-  },
-  {
-    id: 'PR-004',
-    assetId: 'A005',
-    assetDescripcion: 'Alineadora 3D HawkEye',
-    assetPlaca: 'ACT-0012',
-    solicitante: 'Pedro Alvarado',
-    ordenTrabajo: 'OT-2025-0205',
-    motivoUso: 'Alineación post-cambio de suspensión Stinger',
-    fechaSolicitud: '2025-03-22T09:00:00',
-    fechaAprobacion: '2025-03-22T09:05:00',
-    aprobadoPor: 'Carlos Mendoza',
-    firmaDigital: 'Carlos Mendoza — 2025-03-22 09:05',
-    fechaSalida: '2025-03-22T09:15:00',
-    fechaDevolucionEstimada: '2025-03-22',
-    estado: 'Aprobado',
-  },
-];
-
-export const mockInspecciones: InspeccionFotografica[] = [
-  {
-    id: 'INS-001',
-    tecnico: 'Carlos Mendoza',
-    inspeccionadoPor: 'Carlos Mendoza',
-    fechaInspeccion: '2025-03-17',
-    ubicacion: 'Taller / Diagnóstico',
-    fotoActualUrl: 'https://images.unsplash.com/photo-1581092921461-fd0e5765ce14?w=500&q=60',
-    fotoBaseUrl: 'https://images.unsplash.com/photo-1530825894095-9c184b068fcb?w=500&q=60',
-    discrepancias: [],
-    tieneDiscrepancias: false,
-    reporteGenerado: false,
-    observaciones: 'Todo en orden',
-  },
-  {
-    id: 'INS-002',
-    tecnico: 'Luis Pérez',
-    inspeccionadoPor: 'Carlos Mendoza',
-    fechaInspeccion: '2025-03-17',
-    ubicacion: 'Bodega / Herramientas Especiales',
-    fotoActualUrl: 'https://images.unsplash.com/photo-1572981779307-38b8cabb2407?w=500&q=60',
-    fotoBaseUrl: 'https://images.unsplash.com/photo-1530825894095-9c184b068fcb?w=500&q=60',
-    discrepancias: ['Torquímetro Digital no está en caja', 'Falta destornillador de precisión Torx T30'],
-    tieneDiscrepancias: true,
-    reporteGenerado: true,
-    observaciones: 'Torquímetro en reparación (FC001), destornillador sin localizar',
-  },
-  {
-    id: 'INS-003',
-    tecnico: 'Roberto Gómez',
-    inspeccionadoPor: 'Carlos Mendoza',
-    fechaInspeccion: '2025-03-24',
-    ubicacion: 'Bodega / Vehículos Eléctricos',
-    fotoActualUrl: 'https://images.unsplash.com/photo-1563207153-f403bf289096?w=500&q=60',
-    fotoBaseUrl: 'https://images.unsplash.com/photo-1563207153-f403bf289096?w=500&q=60',
-    discrepancias: [],
-    tieneDiscrepancias: false,
-    reporteGenerado: false,
-  },
-];
-
-export const mockActasDevolucion: ActaDevolucion[] = [
-  {
-    id: 'ACTA-001',
-    solicitudPrestamoId: 'PR-001',
-    assetId: 'A001',
-    assetDescripcion: 'Scanner Automotriz GDS',
-    tecnico: 'Pedro Alvarado',
-    firmadoPor: 'Pedro Alvarado',
-    fechaEmision: '2025-03-10T17:30:00',
-    condiciones: 'El suscrito declara devolver el activo en las mismas condiciones recibidas. Cualquier daño o faltante será descontado de nómina o requerirá reposición según valor depreciado.',
-    estadoAlDevolver: 'Usada Normal',
-    requiereDescuento: false,
-    documentoNominaGenerado: false,
-    observaciones: 'Devuelto sin novedad al finalizar turno',
-  },
-];
-
-export const mockWishlist: WishlistItem[] = [
-{
-  id: 'WL001',
-  descripcion: 'Multímetro Automotriz Fluke 88V',
-  tipo: 'Herramienta',
-  marca: 'Fluke',
-  modelo: '88V',
-  cantidad: 2,
-  prioridad: 'Alta',
-  justificacion: 'Reemplazo de equipos dañados en diagnóstico',
-  solicitadoPor: 'Jefe de Taller',
-  fechaSolicitud: '2024-03-10',
-  estado: 'Cotizando',
-  proformas: [
-  {
-    id: 'P001',
-    wishlistItemId: 'WL001',
-    proveedor: 'AEKIA S.A.',
-    contacto: 'ventas@aekia.com',
-    valor: 380,
-    fechaCotizacion: '2024-03-12',
-    validezDias: 30,
-    condiciones: 'Entrega inmediata',
-    seleccionada: true
-  },
-  {
-    id: 'P002',
-    wishlistItemId: 'WL001',
-    proveedor: 'Snap-on Tools',
-    contacto: 'rep.ec@snapon.com',
-    valor: 420,
-    fechaCotizacion: '2024-03-13',
-    validezDias: 15,
-    condiciones: 'Importación 15 días',
-    seleccionada: false
-  },
-  {
-    id: 'P003',
-    wishlistItemId: 'WL001',
-    proveedor: 'Equipos Automotrices Cia Ltda',
-    contacto: 'info@equiposauto.ec',
-    valor: 395,
-    fechaCotizacion: '2024-03-14',
-    validezDias: 45,
-    condiciones: 'Incluye calibración inicial',
-    seleccionada: false
-  }]
-
-},
-{
-  id: 'WL002',
-  descripcion: 'Tablet Diagnóstico EV',
-  tipo: 'Tablet',
-  marca: 'Samsung',
-  modelo: 'Galaxy Tab Active4 Pro',
-  cantidad: 1,
-  prioridad: 'Media',
-  justificacion: 'Nueva estación de servicio para vehículos eléctricos',
-  solicitadoPor: 'Jefe de Servicio',
-  fechaSolicitud: '2024-03-15',
-  estado: 'Pendiente',
-  proformas: []
-},
-{
-  id: 'WL003',
-  descripcion: 'Kit Conectores Híbridos KIA',
-  tipo: 'Conector',
-  marca: 'KIA',
-  modelo: 'HEV-KIT-24',
-  cantidad: 3,
-  prioridad: 'Alta',
-  justificacion: 'Stock mínimo requerido por marca',
-  solicitadoPor: 'Jefe de Repuestos',
-  fechaSolicitud: '2024-03-18',
-  estado: 'Cotizando',
-  proformas: [
-  {
-    id: 'P004',
-    wishlistItemId: 'WL003',
-    proveedor: 'AEKIA S.A.',
-    contacto: 'repuestos@aekia.com',
-    valor: 850,
-    fechaCotizacion: '2024-03-19',
-    validezDias: 30,
-    condiciones: 'Sujeto a disponibilidad en planta',
-    seleccionada: false
-  },
-  {
-    id: 'P005',
-    wishlistItemId: 'WL003',
-    proveedor: 'KIA Parts Direct',
-    contacto: 'sales@kiaparts.com',
-    valor: 780,
-    fechaCotizacion: '2024-03-20',
-    validezDias: 20,
-    condiciones: 'FOB Miami',
-    seleccionada: false
-  }]
-
-},
-{
-  id: 'WL004',
-  descripcion: 'Elevador Hidráulico 2 Columnas',
-  tipo: 'Equipo',
-  marca: 'Hunter',
-  modelo: 'L3300',
-  cantidad: 1,
-  prioridad: 'Baja',
-  justificacion: 'Ampliación de bahías de servicio rápido',
-  solicitadoPor: 'Gerente de Sucursal',
-  fechaSolicitud: '2024-03-01',
-  estado: 'Pendiente',
-  proformas: []
-}];
 
 // ─── PILAR 4: Optimización Eficiente de Insumos y EPP ──────────────────────
 
@@ -863,57 +219,70 @@ export interface ConsumoInsumo {
   id: string;
   ordenTrabajo: string;
   tecnico: string;
-  fecha: string;          // ISO date YYYY-MM-DD
-  insumo: string;         // nombre del material
+  fecha: string;
+  insumo: string;
   categoria: CategoriaInsumo;
   cantidad: number;
-  unidad: string;         // "litros", "unidades", "kg"
+  unidad: string;
   costoUnitario: number;
-  costoTotal: number;     // cantidad × costoUnitario
+  costoTotal: number;
   observacion?: string;
 }
 
 export interface EntregaEPP {
   id: string;
   tecnico: string;
-  area: string;           // "Mecánica", "EV", "Alineación", "Recepción"
-  item: string;           // nombre del EPP
+  area: string;
+  item: string;
   categoria: CategoriaEPP;
   cantidad: number;
-  fechaEntrega: string;         // ISO date
-  fechaReposicionProgramada: string; // ISO date
-  entregadoPor: string;         // Técnico Líder
+  fechaEntrega: string;
+  fechaReposicionProgramada: string;
+  entregadoPor: string;
   observacion?: string;
 }
 
-export const mockConsumos: ConsumoInsumo[] = [
-  { id: 'CI-001', ordenTrabajo: 'OT-2025-0142', tecnico: 'Pedro Alvarado', fecha: '2025-01-10', insumo: 'Aceite 5W-30', categoria: 'Lubricante', cantidad: 4, unidad: 'litros', costoUnitario: 8.50, costoTotal: 34.00 },
-  { id: 'CI-002', ordenTrabajo: 'OT-2025-0145', tecnico: 'Juan Morales',   fecha: '2025-01-12', insumo: 'Filtro de aceite', categoria: 'Filtro', cantidad: 1, unidad: 'unidades', costoUnitario: 12.00, costoTotal: 12.00 },
-  { id: 'CI-003', ordenTrabajo: 'OT-2025-0148', tecnico: 'Pedro Alvarado', fecha: '2025-01-15', insumo: 'Aceite 5W-30', categoria: 'Lubricante', cantidad: 5, unidad: 'litros', costoUnitario: 8.50, costoTotal: 42.50 },
-  { id: 'CI-004', ordenTrabajo: 'OT-2025-0150', tecnico: 'Miguel Sánchez', fecha: '2025-01-18', insumo: 'Líquido de frenos DOT4', categoria: 'Frenos', cantidad: 1, unidad: 'litros', costoUnitario: 15.00, costoTotal: 15.00 },
-  { id: 'CI-005', ordenTrabajo: 'OT-2025-0155', tecnico: 'Juan Morales',   fecha: '2025-01-20', insumo: 'Aceite 5W-30', categoria: 'Lubricante', cantidad: 12, unidad: 'litros', costoUnitario: 8.50, costoTotal: 102.00, observacion: 'Consumo elevado — vehículo con fugas detectadas' },
-  { id: 'CI-006', ordenTrabajo: 'OT-2025-0160', tecnico: 'Roberto Gómez', fecha: '2025-01-22', insumo: 'Refrigerante Kia Original', categoria: 'Refrigerante', cantidad: 2, unidad: 'litros', costoUnitario: 18.00, costoTotal: 36.00 },
-  { id: 'CI-007', ordenTrabajo: 'OT-2025-0165', tecnico: 'Pedro Alvarado', fecha: '2025-02-03', insumo: 'Pastillas de freno', categoria: 'Frenos', cantidad: 2, unidad: 'unidades', costoUnitario: 35.00, costoTotal: 70.00 },
-  { id: 'CI-008', ordenTrabajo: 'OT-2025-0170', tecnico: 'Miguel Sánchez', fecha: '2025-02-05', insumo: 'Aceite 5W-30', categoria: 'Lubricante', cantidad: 4, unidad: 'litros', costoUnitario: 8.50, costoTotal: 34.00 },
-  { id: 'CI-009', ordenTrabajo: 'OT-2025-0175', tecnico: 'Juan Morales',   fecha: '2025-02-10', insumo: 'Filtro de aire', categoria: 'Filtro', cantidad: 1, unidad: 'unidades', costoUnitario: 22.00, costoTotal: 22.00 },
-  { id: 'CI-010', ordenTrabajo: 'OT-2025-0180', tecnico: 'Roberto Gómez', fecha: '2025-02-12', insumo: 'Aceite 5W-30', categoria: 'Lubricante', cantidad: 4, unidad: 'litros', costoUnitario: 8.50, costoTotal: 34.00 },
-  { id: 'CI-011', ordenTrabajo: 'OT-2025-0185', tecnico: 'Pedro Alvarado', fecha: '2025-02-15', insumo: 'Aceite 5W-30', categoria: 'Lubricante', cantidad: 14, unidad: 'litros', costoUnitario: 8.50, costoTotal: 119.00, observacion: 'ANOMALÍA: consumo muy superior al promedio del período' },
-  { id: 'CI-012', ordenTrabajo: 'OT-2025-0190', tecnico: 'Miguel Sánchez', fecha: '2025-02-18', insumo: 'Líquido de frenos DOT4', categoria: 'Frenos', cantidad: 2, unidad: 'litros', costoUnitario: 15.00, costoTotal: 30.00 },
-  { id: 'CI-013', ordenTrabajo: 'OT-2025-0195', tecnico: 'Juan Morales',   fecha: '2025-03-02', insumo: 'Refrigerante Kia Original', categoria: 'Refrigerante', cantidad: 1, unidad: 'litros', costoUnitario: 18.00, costoTotal: 18.00 },
-  { id: 'CI-014', ordenTrabajo: 'OT-2025-0200', tecnico: 'Pedro Alvarado', fecha: '2025-03-05', insumo: 'Bujías NGK', categoria: 'Eléctrico', cantidad: 4, unidad: 'unidades', costoUnitario: 9.00, costoTotal: 36.00 },
-];
+// ─── Designación de Responsables ──────────────────────────────────────────────
 
-export const mockEntregasEPP: EntregaEPP[] = [
-  { id: 'EPP-001', tecnico: 'Pedro Alvarado',  area: 'Mecánica',  item: 'Guantes de nitrilo',      categoria: 'Guantes',   cantidad: 2, fechaEntrega: '2025-01-05', fechaReposicionProgramada: '2025-04-05', entregadoPor: 'Carlos Mendoza' },
-  { id: 'EPP-002', tecnico: 'Pedro Alvarado',  area: 'Mecánica',  item: 'Gafas de seguridad',      categoria: 'Lentes',    cantidad: 1, fechaEntrega: '2025-01-05', fechaReposicionProgramada: '2025-07-05', entregadoPor: 'Carlos Mendoza' },
-  { id: 'EPP-003', tecnico: 'Juan Morales',    area: 'Mecánica',  item: 'Guantes de nitrilo',      categoria: 'Guantes',   cantidad: 2, fechaEntrega: '2025-01-08', fechaReposicionProgramada: '2025-04-08', entregadoPor: 'Carlos Mendoza' },
-  { id: 'EPP-004', tecnico: 'Juan Morales',    area: 'Mecánica',  item: 'Guantes de nitrilo',      categoria: 'Guantes',   cantidad: 5, fechaEntrega: '2025-02-20', fechaReposicionProgramada: '2025-05-20', entregadoPor: 'Carlos Mendoza', observacion: 'ALERTA: reposición anticipada — fecha programada era 2025-04-08' },
-  { id: 'EPP-005', tecnico: 'Miguel Sánchez',  area: 'Alineación',item: 'Guantes de nitrilo',      categoria: 'Guantes',   cantidad: 2, fechaEntrega: '2025-01-10', fechaReposicionProgramada: '2025-04-10', entregadoPor: 'Carlos Mendoza' },
-  { id: 'EPP-006', tecnico: 'Miguel Sánchez',  area: 'Alineación',item: 'Calzado de seguridad',    categoria: 'Calzado',   cantidad: 1, fechaEntrega: '2025-01-10', fechaReposicionProgramada: '2026-01-10', entregadoPor: 'Carlos Mendoza' },
-  { id: 'EPP-007', tecnico: 'Roberto Gómez',   area: 'EV',        item: 'Guantes dieléctricos',    categoria: 'Guantes',   cantidad: 1, fechaEntrega: '2025-01-12', fechaReposicionProgramada: '2025-04-12', entregadoPor: 'Carlos Mendoza' },
-  { id: 'EPP-008', tecnico: 'Roberto Gómez',   area: 'EV',        item: 'Mascarilla N95',          categoria: 'Mascarilla',cantidad: 5, fechaEntrega: '2025-01-12', fechaReposicionProgramada: '2025-03-12', entregadoPor: 'Carlos Mendoza' },
-  { id: 'EPP-009', tecnico: 'Pedro Alvarado',  area: 'Mecánica',  item: 'Mascarilla N95',          categoria: 'Mascarilla',cantidad: 8, fechaEntrega: '2025-02-01', fechaReposicionProgramada: '2025-04-01', entregadoPor: 'Carlos Mendoza', observacion: 'ANOMALÍA: consumo acumulado 45% sobre promedio del área' },
-  { id: 'EPP-010', tecnico: 'Juan Morales',    area: 'Mecánica',  item: 'Gafas de seguridad',      categoria: 'Lentes',    cantidad: 1, fechaEntrega: '2025-02-10', fechaReposicionProgramada: '2025-08-10', entregadoPor: 'Carlos Mendoza' },
-  { id: 'EPP-011', tecnico: 'Miguel Sánchez',  area: 'Alineación',item: 'Mascarilla N95',          categoria: 'Mascarilla',cantidad: 3, fechaEntrega: '2025-02-15', fechaReposicionProgramada: '2025-04-15', entregadoPor: 'Carlos Mendoza' },
-  { id: 'EPP-012', tecnico: 'Pedro Alvarado',  area: 'Mecánica',  item: 'Overol de trabajo',       categoria: 'Overol',    cantidad: 1, fechaEntrega: '2025-03-01', fechaReposicionProgramada: '2025-09-01', entregadoPor: 'Carlos Mendoza' },
-];
+export type NivelResponsabilidad = 'area' | 'caja';
+
+export type PermisoResponsabilidad =
+  | 'gestionar_prestamos'
+  | 'aprobar_devoluciones'
+  | 'registrar_fallas'
+  | 'gestionar_epp'
+  | 'ver_reportes';
+
+export type TipoAsignacion = 'titular' | 'co_responsable';
+
+export interface PeriodoResponsabilidad {
+  id: string;
+  nivel: NivelResponsabilidad;
+  area: string;
+  caja?: string;
+  personalId: string;
+  personalNombre: string;
+  tipo: TipoAsignacion;
+  permisos: PermisoResponsabilidad[];
+  fechaInicio: string;
+  fechaFin?: string;
+  asignadoPor: string;
+  notificacionEnviada: boolean;
+  observacion?: string;
+}
+
+export interface PersonalTaller {
+  id: string;
+  nombre: string;
+  cargo: string;
+  area: string;
+  activo: boolean;
+}
+
+export const PERMISO_LABELS: Record<PermisoResponsabilidad, string> = {
+  gestionar_prestamos: 'Gestionar Préstamos',
+  aprobar_devoluciones: 'Aprobar Devoluciones',
+  registrar_fallas: 'Registrar Fallas',
+  gestionar_epp: 'Gestionar EPP',
+  ver_reportes: 'Ver Reportes',
+};

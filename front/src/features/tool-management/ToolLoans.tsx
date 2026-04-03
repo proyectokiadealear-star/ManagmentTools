@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ClipboardList,
   CheckCircle2,
@@ -17,9 +17,9 @@ import {
 import { useAssets, useRole } from '@shared/context/AssetContext';
 import {
   SolicitudPrestamo,
-  mockPrestamos,
   EstadoSolicitudPrestamo,
 } from '../../data/mockData';
+import { getPrestamos } from '../../services/toolService';
 
 const PERSONAL_OPTIONS = [
   'Pedro Alvarado',
@@ -41,7 +41,15 @@ const estadoBadge: Record<EstadoSolicitudPrestamo, { label: string; cls: string;
 export function ToolLoans() {
   const assets = useAssets();
   const role = useRole();
-  const [prestamos, setPrestamos] = useState<SolicitudPrestamo[]>(mockPrestamos);
+  const [prestamos, setPrestamos] = useState<SolicitudPrestamo[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getPrestamos().then((data) => {
+      setPrestamos(data);
+      setLoading(false);
+    });
+  }, []);
   const [search, setSearch] = useState('');
   const [filterEstado, setFilterEstado] = useState<EstadoSolicitudPrestamo | 'Todos'>('Todos');
   const [showSolicitudModal, setShowSolicitudModal] = useState(false);
@@ -129,6 +137,14 @@ export function ToolLoans() {
   const historialAssetDesc = showHistorialModal
     ? assets.find((a) => a.id === showHistorialModal)?.descripcion ?? ''
     : '';
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-amber-500 border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">

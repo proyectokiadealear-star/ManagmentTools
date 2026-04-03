@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save } from 'lucide-react';
+import { X, Save, ImagePlus, Trash2, Upload, Loader2 } from 'lucide-react';
 import { Asset } from '../../data/mockData';
+import { AREAS_OPTIONS } from '../../shared/types/enums';
+import { uploadActivoImagen } from '../../services/assetService';
 interface AssetFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (asset: Asset) => void;
+  onSave: (asset: Asset) => void | Promise<void>;
   initialData?: Asset | null;
 }
 const defaultAsset: Partial<Asset> = {
@@ -21,7 +23,7 @@ const defaultAsset: Partial<Asset> = {
   fechaCompra: '',
   valor: 0,
   ubicacion: '',
-  area: '',
+  area: undefined,
   bahia: '',
   rack: '',
   caja: '',
@@ -34,7 +36,8 @@ const defaultAsset: Partial<Asset> = {
   comentario: '',
   itemProveedor: '',
   capacidadEspecificacion: '',
-  periodicidad: ''
+  periodicidad: '',
+  imagenUrl: '',
 };
 export function AssetFormModal({
   isOpen,
@@ -43,8 +46,14 @@ export function AssetFormModal({
   initialData
 }: AssetFormModalProps) {
   const [formData, setFormData] = useState<Partial<Asset>>(defaultAsset);
+  const [imgError, setImgError] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (isOpen) {
+      setImgError(false);
+      setUploadError(null);
       if (initialData) {
         setFormData(initialData);
       } else {
@@ -70,8 +79,34 @@ export function AssetFormModal({
   };
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // onSave is responsible for closing the modal (may be async)
     onSave(formData as Asset);
-    onClose();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const activoId = formData.id;
+    if (!activoId) {
+      setUploadError('Guarda el activo primero para poder subir una imagen.');
+      return;
+    }
+
+    setUploading(true);
+    setUploadError(null);
+    setImgError(false);
+
+    try {
+      const imagenUrl = await uploadActivoImagen(activoId, file);
+      setFormData((prev) => ({ ...prev, imagenUrl }));
+    } catch (err: any) {
+      setUploadError(err.message || 'No se pudo subir la imagen. Intenta nuevamente.');
+    } finally {
+      setUploading(false);
+      // Limpiar el input para permitir re-subir el mismo archivo
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
   if (!isOpen) return null;
   return (
@@ -120,6 +155,94 @@ export function AssetFormModal({
 
           <div className="flex-1 overflow-y-auto p-6">
             <form id="asset-form" onSubmit={handleSubmit} className="space-y-8">
+
+              {/* ── Foto del Activo ── */}
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900 border-b border-slate-200 pb-2 mb-4 flex items-center gap-2">
+                  <ImagePlus size={15} className="text-amber-500" />
+                  Foto del Activo
+                </h3>
+                <div className="flex flex-col sm:flex-row gap-4 items-start">
+                  {/* Preview */}
+                  <div className="w-full sm:w-40 h-36 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                    {uploading ? (
+                      <div className="flex flex-col items-center gap-2 text-amber-500">
+                        <Loader2 size={28} className="animate-spin" />
+                        <span className="text-xs">Subiendo...</span>
+                      </div>
+                    ) : formData.imagenUrl && !imgError ? (
+                      <img
+                        src={formData.imagenUrl}
+                        alt="Vista previa"
+                        className="w-full h-full object-cover rounded-xl"
+                        onError={() => setImgError(true)}
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-slate-400 p-4 text-center">
+                        <ImagePlus size={28} strokeWidth={1.5} />
+                        <span className="text-xs">Sin imagen</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Upload controls */}
+                  <div className="flex-1 space-y-3">
+                    {/* Input file oculto */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      onChange={handleFileChange}
+                    />
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={uploading}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 rounded-lg transition-colors"
+                      >
+                        {uploading ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Upload size={16} />
+                        )}
+                        {uploading ? 'Subiendo...' : 'Subir foto'}
+                      </button>
+
+                      {formData.imagenUrl && !uploading && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImgError(false);
+                            setFormData((prev) => ({ ...prev, imagenUrl: '' }));
+                          }}
+                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                          title="Quitar imagen"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Errores */}
+                    {uploadError && (
+                      <p className="text-xs text-red-500">{uploadError}</p>
+                    )}
+                    {imgError && (
+                      <p className="text-xs text-red-500">No se pudo cargar la imagen guardada.</p>
+                    )}
+
+                    <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-xs text-amber-700 space-y-1">
+                      <p className="font-semibold">Formatos aceptados:</p>
+                      <p>JPG, PNG, WEBP o GIF — máximo 5 MB</p>
+                      <p className="text-amber-600">La foto se sube automáticamente a Cloudflare R2 al seleccionarla.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Identificación */}
               <div>
                 <h3 className="text-sm font-semibold text-slate-900 border-b border-slate-200 pb-2 mb-4">
@@ -246,15 +369,13 @@ export function AssetFormModal({
                     </label>
                     <select
                       name="area"
-                      value={formData.area}
+                      value={formData.area ?? ''}
                       onChange={handleChange}
                       className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500">
                       <option value="">— Seleccionar área —</option>
-                      <option value="Taller">Taller</option>
-                      <option value="Recepción">Recepción</option>
-                      <option value="Bodega">Bodega</option>
-                      <option value="Administración">Administración</option>
-                      <option value="EV / Híbridos">EV / Híbridos</option>
+                      {AREAS_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
                     </select>
                   </div>
                   <div>

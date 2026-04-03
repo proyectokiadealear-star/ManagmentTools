@@ -1,24 +1,13 @@
-/**
- * AssetContext — Global state for assets and user role.
- *
- * Eliminates prop drilling by providing:
- *   - assets: Asset[] — read-only access to asset data
- *   - role: UserRole | null — current user role
- *   - dispatch: React.Dispatch<AppAction> — for mutations
- *
- * Usage in components:
- *   const { assets, role, dispatch } = useAssetContext();
- *
- * Usage for mutations:
- *   dispatch({ type: 'ADD_ASSET', payload: newAsset });
- *   dispatch({ type: 'UPDATE_ASSET', payload: updatedAsset });
- *   dispatch({ type: 'DELETE_ASSET', payload: id });
- *   dispatch({ type: 'SET_ROLE', payload: 'jefe' });
- *   dispatch({ type: 'LOGOUT' });
- */
-import { createContext, useContext, useReducer, ReactNode } from 'react';
+import { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react';
 import { Asset } from '../../data/mockData';
 import { UserRole } from '@shared/types/roles';
+import {
+  getAssets,
+  createAsset as apiCreateAsset,
+  updateAsset as apiUpdateAsset,
+  deleteAsset as apiDeleteAsset,
+} from '../../services/assetService';
+import { useAuth } from './AuthContext';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,27 +15,23 @@ import { UserRole } from '@shared/types/roles';
 
 export interface AppState {
   assets: Asset[];
-  role: UserRole | null;
+  assetsLoaded: boolean;
 }
 
 export type AppAction =
   | { type: 'ADD_ASSET'; payload: Asset }
   | { type: 'UPDATE_ASSET'; payload: Asset }
   | { type: 'DELETE_ASSET'; payload: string }
-  | { type: 'SET_ROLE'; payload: UserRole }
-  | { type: 'LOGOUT' };
+  | { type: 'SET_ASSETS'; payload: Asset[] };
 
 // ---------------------------------------------------------------------------
-// Reducer
+// Reducer  (pure — only local state mutations)
 // ---------------------------------------------------------------------------
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'ADD_ASSET':
-      return {
-        ...state,
-        assets: [action.payload, ...state.assets],
-      };
+      return { ...state, assets: [action.payload, ...state.assets] };
     case 'UPDATE_ASSET':
       return {
         ...state,
@@ -55,20 +40,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ),
       };
     case 'DELETE_ASSET':
-      return {
-        ...state,
-        assets: state.assets.filter((a) => a.id !== action.payload),
-      };
-    case 'SET_ROLE':
-      return {
-        ...state,
-        role: action.payload,
-      };
-    case 'LOGOUT':
-      return {
-        ...state,
-        role: null,
-      };
+      return { ...state, assets: state.assets.filter((a) => a.id !== action.payload) };
+    case 'SET_ASSETS':
+      return { ...state, assets: action.payload, assetsLoaded: true };
     default:
       return state;
   }
@@ -78,20 +52,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 // Initial State
 // ---------------------------------------------------------------------------
 
-// Lazy initialization to avoid circular dependency issues
-function getInitialAssets(): Asset[] {
-  try {
-    // Dynamic import to avoid issues with mockData not being loaded yet
-    const { mockAssets } = require('../../data/mockData');
-    return mockAssets;
-  } catch {
-    return [];
-  }
-}
-
 const initialState: AppState = {
-  assets: [], // Will be populated by useState initializer in provider
-  role: null,
+  assets: [],
+  assetsLoaded: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -101,6 +64,12 @@ const initialState: AppState = {
 interface AssetContextValue {
   state: AppState;
   dispatch: React.Dispatch<AppAction>;
+  /** Persists a new asset to the backend, then adds it to local state. */
+  addAsset: (data: Omit<Asset, 'id'>) => Promise<Asset>;
+  /** Persists an edit to the backend, then updates local state. */
+  editAsset: (id: string, data: Partial<Asset>) => Promise<Asset>;
+  /** Deletes the asset from the backend, then removes it from local state. */
+  removeAsset: (id: string) => Promise<void>;
 }
 
 const AssetContext = createContext<AssetContextValue | null>(null);
@@ -114,20 +83,43 @@ interface AssetProviderProps {
 }
 
 export function AssetProvider({ children }: AssetProviderProps) {
-  const [state, dispatch] = useReducer(appReducer, undefined, () => ({
-    ...initialState,
-    assets: getInitialAssets(),
-  }));
+  const [state, dispatch] = useReducer(appReducer, initialState);
+
+  // Load assets from backend on mount
+  useEffect(() => {
+    getAssets().then((assets) => {
+      dispatch({ type: 'SET_ASSETS', payload: assets as Asset[] });
+    });
+  }, []);
+
+  // ── API-backed mutations ──────────────────────────────────────────────────
+
+  const addAsset = useCallback(async (data: Omit<Asset, 'id'>): Promise<Asset> => {
+    const created = await apiCreateAsset(data);
+    dispatch({ type: 'ADD_ASSET', payload: created });
+    return created;
+  }, []);
+
+  const editAsset = useCallback(async (id: string, data: Partial<Asset>): Promise<Asset> => {
+    const updated = await apiUpdateAsset(id, data);
+    dispatch({ type: 'UPDATE_ASSET', payload: updated });
+    return updated;
+  }, []);
+
+  const removeAsset = useCallback(async (id: string): Promise<void> => {
+    await apiDeleteAsset(id);
+    dispatch({ type: 'DELETE_ASSET', payload: id });
+  }, []);
 
   return (
-    <AssetContext.Provider value={{ state, dispatch }}>
+    <AssetContext.Provider value={{ state, dispatch, addAsset, editAsset, removeAsset }}>
       {children}
     </AssetContext.Provider>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Hook
+// Hooks
 // ---------------------------------------------------------------------------
 
 export function useAssetContext(): AssetContextValue {
@@ -143,6 +135,8 @@ export function useAssets(): Asset[] {
   return useAssetContext().state.assets;
 }
 
+/** Returns the current user's role from AuthContext */
 export function useRole(): UserRole | null {
-  return useAssetContext().state.role;
+  const { user } = useAuth();
+  return user?.rol ?? null;
 }

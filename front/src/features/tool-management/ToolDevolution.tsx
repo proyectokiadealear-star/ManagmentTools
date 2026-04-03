@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ShieldCheck,
   FileText,
@@ -12,13 +12,14 @@ import { useAssets, useRole } from '@shared/context/AssetContext';
 import {
   SolicitudPrestamo,
   ActaDevolucion,
-  mockPrestamos,
-  mockActasDevolucion,
 } from '../../data/mockData';
+import { getPrestamos, getActas } from '../../services/toolService';
 import { formatCurrency } from '@shared/utils/formatters';
 import { ActaModal } from './ActaModal';
 import { DevolucionModal } from './DevolucionModal';
 import { NominaModal } from './NominaModal';
+import { Pagination } from '@shared/components';
+import { usePagination } from '@shared/hooks/usePagination';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,11 +28,59 @@ import { NominaModal } from './NominaModal';
 export function ToolDevolution() {
   const assets = useAssets();
   const role = useRole();
-  // Actas initialized from mockActasDevolucion
-  const [actas, setActas] = useState<ActaDevolucion[]>([...mockActasDevolucion]);
+  // Actas initialized empty — populated via service
+  const [actas, setActas] = useState<ActaDevolucion[]>([]);
 
-  // Active loans: only those with estado === 'Aprobado'
-  const activePrestamos = mockPrestamos.filter((p) => p.estado === 'Aprobado');
+  // Active loans: populated via service (only those with estado === 'Aprobado')
+  const [activePrestamos, setActivePrestamos] = useState<SolicitudPrestamo[]>([]);
+
+  // Loading state
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      getActas(),
+      getPrestamos('Aprobado').catch(() => []),
+    ]).then(([actasData, prestamosData]) => {
+      setActas(actasData);
+      setActivePrestamos(prestamosData);
+      setLoading(false);
+    });
+  }, []);
+
+  // KPIs
+  const totalActas = actas.length;
+  const conDanoOIncompletas = actas.filter(
+    (a) => a.estadoAlDevolver === 'Dañada' || a.estadoAlDevolver === 'Incompleta'
+  ).length;
+  const docsNomina = actas.filter((a) => a.documentoNominaGenerado).length;
+
+  // Penalty actas (for jefe)
+  const penaltyActas = actas.filter((a) => a.requiereDescuento);
+
+  // Pagination — active loans
+  const {
+    paginatedItems: pagePrestamos,
+    currentPage: prestPage, pageSize: prestPageSize,
+    setCurrentPage: setPrestPage, setPageSize: setPrestPageSize,
+    totalItems: totalPrestamos,
+  } = usePagination(activePrestamos, 10);
+
+  // Pagination — actas
+  const {
+    paginatedItems: pageActas,
+    currentPage: actasPage, pageSize: actasPageSize,
+    setCurrentPage: setActasPage, setPageSize: setActasPageSize,
+    totalItems: totalActasPag,
+  } = usePagination(actas, 10);
+
+  // Pagination — penalty actas
+  const {
+    paginatedItems: pagePenaltyActas,
+    currentPage: penPage, pageSize: penPageSize,
+    setCurrentPage: setPenPage, setPageSize: setPenPageSize,
+    totalItems: totalPenalty,
+  } = usePagination(penaltyActas, 10);
 
   // Modal state
   const [actaModalPrestamo, setActaModalPrestamo] = useState<SolicitudPrestamo | null>(null);
@@ -57,18 +106,16 @@ export function ToolDevolution() {
     }
   }
 
-  // KPIs
-  const totalActas = actas.length;
-  const conDanoOIncompletas = actas.filter(
-    (a) => a.estadoAlDevolver === 'Dañada' || a.estadoAlDevolver === 'Incompleta'
-  ).length;
-  const docsNomina = actas.filter((a) => a.documentoNominaGenerado).length;
-
-  // Penalty actas (for jefe)
-  const penaltyActas = actas.filter((a) => a.requiereDescuento);
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-amber-500 border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       {/* ── Header ── */}
       <div className="flex items-center gap-3">
         <div className="p-2 bg-amber-100 rounded-xl">
@@ -162,7 +209,7 @@ export function ToolDevolution() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {activePrestamos.map((prestamo) => {
+                  {pagePrestamos.map((prestamo) => {
                     const alreadyHasActa = actas.some(
                       (a) => a.solicitudPrestamoId === prestamo.id
                     );
@@ -202,6 +249,15 @@ export function ToolDevolution() {
                   })}
                 </tbody>
               </table>
+              <div className="px-4 py-3 border-t border-gray-100">
+                <Pagination
+                  currentPage={prestPage}
+                  pageSize={prestPageSize}
+                  totalItems={totalPrestamos}
+                  onPageChange={setPrestPage}
+                  onPageSizeChange={setPrestPageSize}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -242,7 +298,7 @@ export function ToolDevolution() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {actas.map((acta) => {
+                  {pageActas.map((acta) => {
                     const isDamaged =
                       acta.estadoAlDevolver === 'Dañada' ||
                       acta.estadoAlDevolver === 'Incompleta';
@@ -303,6 +359,15 @@ export function ToolDevolution() {
                   })}
                 </tbody>
               </table>
+              <div className="px-4 py-3 border-t border-gray-100">
+                <Pagination
+                  currentPage={actasPage}
+                  pageSize={actasPageSize}
+                  totalItems={totalActasPag}
+                  onPageChange={setActasPage}
+                  onPageSizeChange={setActasPageSize}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -353,7 +418,7 @@ export function ToolDevolution() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {penaltyActas.map((acta) => (
+                    {pagePenaltyActas.map((acta) => (
                       <tr key={acta.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3 font-medium text-gray-800">
                           {acta.assetDescripcion}
@@ -405,6 +470,15 @@ export function ToolDevolution() {
                     ))}
                   </tbody>
                 </table>
+                <div className="px-4 py-3 border-t border-gray-100">
+                  <Pagination
+                    currentPage={penPage}
+                    pageSize={penPageSize}
+                    totalItems={totalPenalty}
+                    onPageChange={setPenPage}
+                    onPageSizeChange={setPenPageSize}
+                  />
+                </div>
               </div>
             )}
           </div>

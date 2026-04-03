@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Calculator,
@@ -13,7 +13,13 @@ import {
   ChevronUp,
   Tag } from
 'lucide-react';
-import { mockWishlist, WishlistItem, Proforma } from '../../data/mockData';
+import { WishlistItem, Proforma } from '../../data/mockData';
+import {
+  getWishlist,
+  createWishlistItem as createWishlistItemSvc,
+  addProformaToWishlistItem,
+  seleccionarProformaWishlist as seleccionarProformaSvc,
+} from '../../services/financeService';
 import { calcDepreciation } from '@shared/utils/depreciation';
 import { useAssets } from '@shared/context/AssetContext';
 import { AddWishlistModal } from './AddWishlistModal';
@@ -24,8 +30,17 @@ export function Depreciation() {
   const [activeTab, setActiveTab] = useState<'depreciation' | 'wishlist'>(
     'depreciation'
   );
-  const [wishlist, setWishlist] = useState<WishlistItem[]>(mockWishlist);
+  const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
+
+  useEffect(() => {
+    getWishlist().then((data) => {
+      setWishlist(data);
+    }).finally(() => {
+      setLoading(false);
+    });
+  }, []);
   // Modal states
   const [isAddWishlistOpen, setIsAddWishlistOpen] = useState(false);
   const [isAddProformaOpen, setIsAddProformaOpen] = useState(false);
@@ -50,33 +65,17 @@ export function Depreciation() {
     prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
-  const handleSelectProforma = (wishlistItemId: string, proformaId: string) => {
+  const handleSelectProforma = async (wishlistItemId: string, proformaId: string) => {
+    const updated = await seleccionarProformaSvc(wishlistItemId, proformaId);
     setWishlist((prev) =>
-    prev.map((item) => {
-      if (item.id === wishlistItemId) {
-        return {
-          ...item,
-          estado: 'Aprobado',
-          proformas: item.proformas.map((p) => ({
-            ...p,
-            seleccionada: p.id === proformaId
-          }))
-        };
-      }
-      return item;
-    })
+      prev.map((item) => (item.id === wishlistItemId ? updated : item))
     );
   };
-  const handleSaveWishlist = (e: React.FormEvent) => {
+  const handleSaveWishlist = async (e: React.FormEvent) => {
     e.preventDefault();
-    const item: WishlistItem = {
-      ...newWishlist,
-      id: `WL${Math.floor(Math.random() * 1000).
-      toString().
-      padStart(3, '0')}`,
-      fechaSolicitud: new Date().toISOString().split('T')[0],
-      proformas: []
-    } as WishlistItem;
+    const item = await createWishlistItemSvc(
+      newWishlist as Omit<WishlistItem, 'id' | 'fechaSolicitud' | 'proformas'>
+    );
     setWishlist((prev) => [item, ...prev]);
     setIsAddWishlistOpen(false);
     setNewWishlist({
@@ -86,28 +85,15 @@ export function Depreciation() {
       cantidad: 1
     });
   };
-  const handleSaveProforma = (e: React.FormEvent) => {
+  const handleSaveProforma = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedWishlistId) return;
-    const proforma: Proforma = {
-      ...newProforma,
-      id: `P${Math.floor(Math.random() * 1000).
-      toString().
-      padStart(3, '0')}`,
-      wishlistItemId: selectedWishlistId,
-      fechaCotizacion: new Date().toISOString().split('T')[0]
-    } as Proforma;
+    const updated = await addProformaToWishlistItem(
+      selectedWishlistId,
+      newProforma as Omit<Proforma, 'id' | 'wishlistItemId' | 'fechaCotizacion'>
+    );
     setWishlist((prev) =>
-    prev.map((item) => {
-      if (item.id === selectedWishlistId) {
-        return {
-          ...item,
-          estado: item.estado === 'Pendiente' ? 'Cotizando' : item.estado,
-          proformas: [...item.proformas, proforma]
-        };
-      }
-      return item;
-    })
+      prev.map((item) => (item.id === selectedWishlistId ? updated : item))
     );
     setIsAddProformaOpen(false);
     setNewProforma({
@@ -396,6 +382,15 @@ export function Depreciation() {
 
       {activeTab === 'wishlist' &&
       <div className="space-y-6">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600 mx-auto mb-3"></div>
+                <p className="text-sm text-slate-500">Cargando lista de compras...</p>
+              </div>
+            </div>
+          ) : (
+          <>
           <div className="flex justify-between items-center">
             <div>
               <h2 className="text-lg font-bold text-slate-900">
@@ -668,6 +663,8 @@ export function Depreciation() {
 
           })}
           </div>
+          </>
+          )}
         </div>
       }
 

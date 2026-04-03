@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Camera,
   AlertTriangle,
@@ -11,77 +11,85 @@ import {
   MapPin,
   User,
   ShieldAlert,
+  Loader2,
 } from 'lucide-react';
 import { useRole } from '@shared/context/AssetContext';
-import { InspeccionFotografica, mockInspecciones } from '../../data/mockData';
+import { InspeccionFotografica } from '../../data/mockData';
+import { getInspecciones, createInspeccion } from '../../services/toolService';
+import { getUsuarios } from '../../services/usuariosService';
+import { getAreas } from '../../services/assetService';
 
-const TECNICOS = [
-  'Carlos Mendoza',
-  'Luis Pérez',
-  'Roberto Gómez',
-  'Ana Torres',
-  'Miguel Sánchez',
-  'Pedro Alvarado',
-];
-
-const UBICACIONES = [
-  'Taller / Diagnóstico',
-  'Taller / Alineación y Balanceo',
-  'Bodega / Herramientas Especiales',
-  'Bodega / Vehículos Eléctricos',
-  'Recepción / Atención al Cliente',
-];
-
-// Simulación comparador visual: palabras clave de discrepancias resaltadas
-const DISCREPANCIAS_SUGERIDAS = [
-  'Torquímetro Digital no está en caja',
-  'Falta destornillador de precisión Torx T30',
-  'Llave de impacto neumática desaparecida',
-  'Calibrador Vernier sin funda protectora',
-  'Kit de sondas de diagnóstico incompleto',
-  'Llave Allen juego — faltan 3 piezas',
-];
+/** Normaliza una discrepancia (puede venir como string del mock o como objeto del backend) */
+function discText(d: unknown): string {
+  if (typeof d === 'string') return d;
+  if (d && typeof d === 'object' && 'descripcion' in d) return (d as { descripcion: string }).descripcion;
+  return String(d);
+}
 
 export function ToolInspections() {
   const role = useRole();
-  const [inspecciones, setInspecciones] = useState<InspeccionFotografica[]>(mockInspecciones);
+  const [inspecciones, setInspecciones] = useState<InspeccionFotografica[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showNuevaModal, setShowNuevaModal] = useState(false);
   const [showComparadorModal, setShowComparadorModal] = useState<InspeccionFotografica | null>(null);
   const [showReporteModal, setShowReporteModal] = useState<InspeccionFotografica | null>(null);
+
+  const [tecnicos, setTecnicos] = useState<string[]>([]);
+  const [ubicaciones, setUbicaciones] = useState<string[]>([]);
 
   const [formNueva, setFormNueva] = useState({
     tecnico: '',
     ubicacion: '',
     discrepancias: [] as string[],
     observaciones: '',
-    fotoActualUrl: 'https://images.unsplash.com/photo-1581092921461-fd0e5765ce14?w=500&q=60',
   });
 
   const [discrepanciaInput, setDiscrepanciaInput] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      getInspecciones(),
+      getUsuarios().catch(() => []),
+      getAreas().catch(() => []),
+    ]).then(([insData, usuarios, areas]) => {
+      setInspecciones(insData);
+      setTecnicos(usuarios.map(u => u.nombre));
+      setUbicaciones(areas.map(a => a.nombre));
+      setLoading(false);
+    });
+  }, []);
 
   const totalInspecciones = inspecciones.length;
   const conDiscrepancias = inspecciones.filter((i) => i.tieneDiscrepancias).length;
   const reportesGenerados = inspecciones.filter((i) => i.reporteGenerado).length;
 
-  const handleGuardarInspeccion = () => {
+  const handleGuardarInspeccion = async () => {
     if (!formNueva.tecnico || !formNueva.ubicacion) return;
-    const nueva: InspeccionFotografica = {
-      id: `INS-${String(inspecciones.length + 1).padStart(3, '0')}`,
-      tecnico: formNueva.tecnico,
-      inspeccionadoPor: 'Carlos Mendoza',
-      fechaInspeccion: new Date().toISOString().slice(0, 10),
-      ubicacion: formNueva.ubicacion,
-      fotoActualUrl: formNueva.fotoActualUrl,
-      fotoBaseUrl: 'https://images.unsplash.com/photo-1530825894095-9c184b068fcb?w=500&q=60',
-      discrepancias: formNueva.discrepancias,
-      tieneDiscrepancias: formNueva.discrepancias.length > 0,
-      reporteGenerado: false,
-      observaciones: formNueva.observaciones,
-    };
-    setInspecciones((prev) => [nueva, ...prev]);
-    setFormNueva({ tecnico: '', ubicacion: '', discrepancias: [], observaciones: '', fotoActualUrl: nueva.fotoActualUrl });
-    setDiscrepanciaInput('');
-    setShowNuevaModal(false);
+    setSaving(true);
+    try {
+      const payload: Omit<InspeccionFotografica, 'id'> = {
+        tecnico: formNueva.tecnico,
+        inspeccionadoPor: formNueva.tecnico,
+        fechaInspeccion: new Date().toISOString().slice(0, 10),
+        ubicacion: formNueva.ubicacion,
+        fotoActualUrl: '',
+        fotoBaseUrl: '',
+        discrepancias: formNueva.discrepancias,
+        tieneDiscrepancias: formNueva.discrepancias.length > 0,
+        reporteGenerado: false,
+        observaciones: formNueva.observaciones,
+      };
+      const created = await createInspeccion(payload);
+      setInspecciones((prev) => [created, ...prev]);
+      setFormNueva({ tecnico: '', ubicacion: '', discrepancias: [], observaciones: '' });
+      setDiscrepanciaInput('');
+      setShowNuevaModal(false);
+    } catch (err) {
+      console.error('[ToolInspections] Error al guardar inspección:', err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleGenerarReporte = (ins: InspeccionFotografica) => {
@@ -93,6 +101,22 @@ export function ToolInspections() {
 
   return (
     <div className="p-6 space-y-6">
+      {loading ? (
+        <div className="space-y-6 animate-pulse">
+          <div className="h-8 bg-slate-200 rounded w-1/3" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="bg-slate-100 border border-slate-200 rounded-xl p-4 h-20" />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="bg-slate-100 border border-slate-200 rounded-xl h-64" />
+            ))}
+          </div>
+        </div>
+      ) : (
+      <>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -200,7 +224,7 @@ export function ToolInspections() {
                   {ins.discrepancias.map((d, i) => (
                     <div key={i} className="flex items-start gap-1.5 text-xs text-orange-700 bg-orange-50 rounded px-2 py-1">
                       <AlertTriangle size={10} className="mt-0.5 shrink-0" />
-                      {d}
+                      {discText(d)}
                     </div>
                   ))}
                 </div>
@@ -271,7 +295,7 @@ export function ToolInspections() {
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
                 >
                   <option value="">Seleccionar técnico...</option>
-                  {TECNICOS.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {tecnicos.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div>
@@ -282,23 +306,19 @@ export function ToolInspections() {
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
                 >
                   <option value="">Seleccionar ubicación...</option>
-                  {UBICACIONES.map((u) => <option key={u} value={u}>{u}</option>)}
+                  {ubicaciones.map((u) => <option key={u} value={u}>{u}</option>)}
                 </select>
               </div>
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600">
-                <span className="font-semibold">📷 Foto simulada:</span> En el prototipo se usa una imagen predeterminada. En producción, el técnico tomaría la foto desde su celular.
-              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Discrepancias detectadas (F9.2)</label>
                 <div className="flex gap-2">
-                  <select
+                  <input
                     value={discrepanciaInput}
                     onChange={(e) => setDiscrepanciaInput(e.target.value)}
+                    placeholder="Describir discrepancia..."
                     className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  >
-                    <option value="">Seleccionar discrepancia...</option>
-                    {DISCREPANCIAS_SUGERIDAS.map((d) => <option key={d} value={d}>{d}</option>)}
-                  </select>
+                  />
                   <button
                     onClick={() => {
                       if (discrepanciaInput && !formNueva.discrepancias.includes(discrepanciaInput)) {
@@ -347,9 +367,11 @@ export function ToolInspections() {
               </button>
               <button
                 onClick={handleGuardarInspeccion}
-                className="px-4 py-2 text-sm bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg transition-colors"
+                disabled={saving}
+                className="px-4 py-2 text-sm bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                Guardar Inspección
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {saving ? 'Guardando...' : 'Guardar Inspección'}
               </button>
             </div>
           </div>
@@ -408,7 +430,7 @@ export function ToolInspections() {
                     {showComparadorModal.discrepancias.map((d, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-orange-700">
                         <span className="bg-orange-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center shrink-0 font-bold mt-0.5">{i + 1}</span>
-                        {d}
+                        {discText(d)}
                       </li>
                     ))}
                   </ul>
@@ -454,7 +476,7 @@ export function ToolInspections() {
                 <p className="font-semibold text-orange-800">Faltantes / Discrepancias Detectadas:</p>
                 <ol className="list-decimal list-inside space-y-1">
                   {showReporteModal.discrepancias.map((d, i) => (
-                    <li key={i} className="text-orange-700">{d}</li>
+                    <li key={i} className="text-orange-700">{discText(d)}</li>
                   ))}
                 </ol>
                 <hr className="border-slate-300" />
@@ -481,6 +503,8 @@ export function ToolInspections() {
         <span>🟨 <strong>Técnico Líder:</strong> Fotografiar cajas (F9.1), comparar con foto base (F9.2)</span>
         <span>🟩 <strong>Jefe de Taller:</strong> Generar reporte oficial de discrepancias para Seguridad / RRHH (F9.3)</span>
       </div>
+      </>
+      )}
     </div>
   );
 }

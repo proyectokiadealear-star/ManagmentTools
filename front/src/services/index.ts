@@ -7,3 +7,5 @@ export * from './maintenanceService';
 export * from './toolService';
 export * from './consumablesService';
 export * from './financeService';
+export * from './responsabilidadService';
+export * from './usuariosService';

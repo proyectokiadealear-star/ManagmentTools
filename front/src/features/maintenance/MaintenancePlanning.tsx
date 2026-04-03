@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CalendarClock,
@@ -19,12 +19,10 @@ import {
 import {
   MantenimientoPreventivo,
   FallaCorrectiva,
-  mockMantenimientos,
-  mockFallasCorrectivas,
   SemaforoEstado,
   CotizacionRegistro,
-  mockCotizaciones,
 } from '../../data/mockData';
+import { getMantenimientos, getFallas, getCotizaciones } from '../../services/maintenanceService';
 import { useAssets, useRole } from '@shared/context/AssetContext';
 import { QuotationModal } from './QuotationModal';
 import { RegistrarFallaModal } from './RegistrarFallaModal';
@@ -63,8 +61,8 @@ export function MaintenancePlanning() {
   const assets = useAssets();
   const role = useRole();
   const [activeTab, setActiveTab] = useState<'cronograma' | 'fallas' | 'cotizaciones'>('cronograma');
-  const [mantenimientos, setMantenimientos] = useState<MantenimientoPreventivo[]>(mockMantenimientos);
-  const [fallas, setFallas] = useState<FallaCorrectiva[]>(mockFallasCorrectivas);
+  const [mantenimientos, setMantenimientos] = useState<MantenimientoPreventivo[]>([]);
+  const [fallas, setFallas] = useState<FallaCorrectiva[]>([]);
   const [expandedFalla, setExpandedFalla] = useState<string | null>(null);
 
   // Modal nueva falla
@@ -77,9 +75,22 @@ export function MaintenancePlanning() {
   });
 
   // Cotizaciones (F5.1 / F5.2) — solo para jefe
-  const [cotizaciones, setCotizaciones] = useState<CotizacionRegistro[]>(mockCotizaciones);
+  const [cotizaciones, setCotizaciones] = useState<CotizacionRegistro[]>([]);
   const [isQuotationOpen, setIsQuotationOpen] = useState(false);
   const [selectedCotizacion, setSelectedCotizacion] = useState<CotizacionRegistro | null>(null);
+
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([getMantenimientos(), getFallas(), getCotizaciones()]).then(
+      ([mants, falls, cots]) => {
+        setMantenimientos(mants);
+        setFallas(falls);
+        setCotizaciones(cots);
+        setLoading(false);
+      }
+    );
+  }, []);
 
   const handleSaveCotizacion = (cotizacion: CotizacionRegistro) => {
     setCotizaciones((prev) => {
@@ -157,6 +168,13 @@ export function MaintenancePlanning() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
+      {loading && (
+        <div className="flex items-center justify-center py-32">
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent" />
+        </div>
+      )}
+      {!loading && (
+      <>
       {/* Header */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -706,6 +724,8 @@ export function MaintenancePlanning() {
         newFalla={newFalla}
         setNewFalla={setNewFalla}
       />
+      </>
+      )}
     </div>
   );
 }

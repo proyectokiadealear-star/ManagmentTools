@@ -1,3 +1,9 @@
+# Environment variables — NEVER commit .env (contains Firebase secrets)
+.env
+.env.local
+.env.development
+.env.production
+nul
 # Logs
 logs
 *.log

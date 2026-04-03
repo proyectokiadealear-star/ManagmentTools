@@ -1,14 +1,28 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Search, Filter, Eye, MapPin, Plus, Edit, Trash2, LayoutList, LayoutGrid, Wrench } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, Filter, Eye, MapPin, Plus, Edit, Trash2, LayoutList, LayoutGrid, Wrench, CheckCircle, XCircle } from 'lucide-react';
 import { Asset } from '../../data/mockData';
 import { AssetDetailModal } from './AssetDetailModal';
 import { AssetFormModal } from './AssetFormModal';
 import { useAssets, useAssetContext } from '@shared/context/AssetContext';
+import { AREA_LABELS } from '@shared/types/enums';
+import { ConfirmModal } from '@shared/components';
+
+function SkeletonRow() {
+  return (
+    <tr className="border-b border-slate-100">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <td key={i} className="px-6 py-4">
+          <div className="h-4 bg-slate-200 rounded animate-pulse w-3/4" />
+        </td>
+      ))}
+    </tr>
+  );
+}
 
 export function Inventory() {
   const assets = useAssets();
-  const { dispatch } = useAssetContext();
+  const { state: { assetsLoaded }, removeAsset, addAsset, editAsset } = useAssetContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterArea, setFilterArea] = useState('');
   const [viewMode, setViewMode] = useState<'tabla' | 'galeria'>('tabla');
@@ -16,14 +30,22 @@ export function Inventory() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [assetToEdit, setAssetToEdit] = useState<Asset | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const showToast = (type: 'success' | 'error', text: string) => {
+    setToast({ type, text });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   const uniqueAreas = Array.from(new Set(assets.map((a) => a.area).filter(Boolean))) as string[];
 
   const filteredAssets = assets.filter((asset) => {
+    const term = searchTerm.toLowerCase();
     const matchesSearch =
-      asset.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      asset.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      asset.placa.toLowerCase().includes(searchTerm.toLowerCase());
+      (asset.descripcion ?? '').toLowerCase().includes(term) ||
+      (asset.codigo ?? '').toLowerCase().includes(term) ||
+      (asset.placa ?? '').toLowerCase().includes(term);
     const matchesArea = filterArea === '' || asset.area === filterArea;
     return matchesSearch && matchesArea;
   });
@@ -38,15 +60,22 @@ export function Inventory() {
     setIsDetailModalOpen(false);
   };
   const handleDeleteAsset = (id: string) => {
-    if (window.confirm('¿Está seguro de eliminar este activo?')) {
-      dispatch({ type: 'DELETE_ASSET', payload: id });
-    }
+    setConfirmDeleteId(id);
   };
-  const handleSaveAsset = (asset: Asset) => {
-    if (assetToEdit) {
-      dispatch({ type: 'UPDATE_ASSET', payload: asset });
-    } else {
-      dispatch({ type: 'ADD_ASSET', payload: asset });
+  const handleSaveAsset = async (asset: Asset) => {
+    try {
+      if (assetToEdit) {
+        await editAsset(asset.id, asset);
+        showToast('success', 'Activo actualizado correctamente.');
+      } else {
+        const { id: _id, ...rest } = asset;
+        await addAsset(rest);
+        showToast('success', 'Activo creado correctamente.');
+      }
+      setIsFormModalOpen(false);
+      setAssetToEdit(null);
+    } catch {
+      showToast('error', 'No se pudo guardar el activo. Intente de nuevo.');
     }
   };
   const handleOpenNewAsset = () => {
@@ -63,6 +92,25 @@ export function Inventory() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto h-full flex flex-col">
+
+      {/* Toast notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -16 }}
+            className={`fixed top-4 right-4 z-[60] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium border ${
+              toast.type === 'success'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                : 'bg-rose-50 text-rose-800 border-rose-200'
+            }`}
+          >
+            {toast.type === 'success' ? <CheckCircle size={16} /> : <XCircle size={16} />}
+            {toast.text}
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">
@@ -144,7 +192,16 @@ export function Inventory() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredAssets.map((asset, index) =>
+                {!assetsLoaded ? (
+                  Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
+                ) : filteredAssets.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-sm">
+                      No se encontraron activos.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredAssets.map((asset, index) =>
                 <motion.tr
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -180,7 +237,7 @@ export function Inventory() {
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-1.5 text-slate-900 font-medium">
                         <MapPin size={14} className="text-blue-500" />
-                        {asset.area}
+                        {asset.area ? AREA_LABELS[asset.area] : asset.area}
                       </div>
                       {asset.bahia && (
                         <div className="flex items-center gap-1.5 text-xs text-slate-500 pl-5">
@@ -244,6 +301,7 @@ export function Inventory() {
                     </div>
                   </td>
                 </motion.tr>
+                  )
                 )}
               </tbody>
             </table>
@@ -303,7 +361,7 @@ export function Inventory() {
                     <div className="flex flex-col gap-0.5 text-xs">
                       <div className="flex items-center gap-1 text-slate-700 font-medium">
                         <MapPin size={12} className="text-blue-500 shrink-0" />
-                        {asset.area}
+                        {asset.area ? AREA_LABELS[asset.area] : '—'}
                       </div>
                       {asset.bahia && (
                         <p className="text-slate-500 pl-4">
@@ -358,6 +416,26 @@ export function Inventory() {
         onClose={() => setIsFormModalOpen(false)}
         onSave={handleSaveAsset}
         initialData={assetToEdit} />
+
+      <ConfirmModal
+        isOpen={confirmDeleteId !== null}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={async () => {
+          if (!confirmDeleteId) return;
+          try {
+            await removeAsset(confirmDeleteId);
+            setIsDetailModalOpen(false);
+            showToast('success', 'Activo eliminado correctamente.');
+          } catch {
+            showToast('error', 'No se pudo eliminar el activo. Intente de nuevo.');
+          }
+        }}
+        title="Eliminar activo"
+        message="Esta acción no se puede deshacer. ¿Está seguro de que desea eliminar este activo del inventario?"
+        confirmLabel="Sí, eliminar"
+        cancelLabel="Cancelar"
+        variant="danger"
+      />
     </div>
   );
 }

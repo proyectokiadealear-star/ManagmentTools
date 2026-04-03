@@ -1,38 +1,13 @@
-import { useState } from 'react';
-import { HardHat, Plus, X, AlertTriangle, CheckCircle, Users, Package } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { HardHat, Plus, X, AlertTriangle, CheckCircle, Users, Package, Loader2 } from 'lucide-react';
 import { useRole } from '@shared/context/AssetContext';
 import { computeStats } from '@shared/utils/stats';
-import { EntregaEPP, CategoriaEPP, mockEntregasEPP } from '../../data/mockData';
-
-const TECNICOS = [
-  'Pedro Alvarado',
-  'Juan Morales',
-  'Miguel Sánchez',
-  'Roberto Gómez',
-  'Ana Torres',
-  'Luis Pérez',
-];
-
-const AREAS = ['Mecánica', 'EV', 'Alineación', 'Recepción'];
-
-const ITEMS_EPP = [
-  'Guantes de nitrilo',
-  'Gafas de seguridad',
-  'Calzado de seguridad',
-  'Mascarilla N95',
-  'Overol de trabajo',
-  'Guantes dieléctricos',
-  'Protector auditivo',
-];
-
-const CATEGORIAS_EPP: CategoriaEPP[] = [
-  'Guantes',
-  'Lentes',
-  'Calzado',
-  'Mascarilla',
-  'Overol',
-  'Otro',
-];
+import { Pagination } from '@shared/components';
+import { usePagination } from '@shared/hooks/usePagination';
+import { getEntregasEPP, createEntregaEPP, getCatalogoEPP } from '../../services/consumablesService';
+import type { EntregaEPP, CategoriaEPP } from '../../services/consumablesService';
+import { getUsuarios } from '../../services/usuariosService';
+import { getAreas } from '../../services/assetService';
 
 type AlertItem = {
   type: 'early' | 'excess';
@@ -44,7 +19,35 @@ type AlertItem = {
 
 export function PPEManagement() {
   const role = useRole();
-  const [entregas, setEntregas] = useState<EntregaEPP[]>(mockEntregasEPP);
+  const [entregas, setEntregas] = useState<EntregaEPP[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [tecnicosList, setTecnicosList] = useState<string[]>([]);
+  const [areasList, setAreasList] = useState<string[]>([]);
+  const [itemsEPP, setItemsEPP] = useState<string[]>([]);
+  const [categoriasEPP, setCategoriasEPP] = useState<CategoriaEPP[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([
+      getEntregasEPP(),
+      getUsuarios().catch(() => []),
+      getAreas().catch(() => []),
+      getCatalogoEPP().catch(() => []),
+    ]).then(([data, usuarios, areas, catalogo]) => {
+      if (!cancelled) {
+        setEntregas(data);
+        setTecnicosList(usuarios.map(u => u.nombre));
+        setAreasList(areas.map(a => a.nombre));
+        setItemsEPP(catalogo.map(c => c.nombre));
+        const cats = Array.from(new Set(catalogo.map(c => c.categoria))) as CategoriaEPP[];
+        setCategoriasEPP(cats.length > 0 ? cats : ['Guantes', 'Lentes', 'Calzado', 'Mascarilla', 'Overol', 'Otro']);
+        setLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, []);
   const [filterTecnico, setFilterTecnico] = useState<string>('Todos');
   const [showFormModal, setShowFormModal] = useState(false);
   const [form, setForm] = useState({
@@ -66,6 +69,13 @@ export function PPEManagement() {
     filterTecnico === 'Todos'
       ? entregas
       : entregas.filter(e => e.tecnico === filterTecnico);
+
+  const {
+    paginatedItems: pageEntregas,
+    currentPage: entregasPage, pageSize: entregasPageSize,
+    setCurrentPage: setEntregasPage, setPageSize: setEntregasPageSize,
+    totalItems: totalEntregas,
+  } = usePagination(filteredEntregas, 10);
 
   // ─── F12.2 — Per-technician totals ────────────────────────────────────────
   const totalByTecnico: Record<string, { total: number; area: string }> = {};
@@ -94,6 +104,13 @@ export function PPEManagement() {
       return { ...t, deviation, badge };
     })
     .sort((a, b) => b.deviation - a.deviation);
+
+  const {
+    paginatedItems: pageTecnicoRows,
+    currentPage: compPage, pageSize: compPageSize,
+    setCurrentPage: setCompPage, setPageSize: setCompPageSize,
+    totalItems: totalTecnicoRows,
+  } = usePagination(tecnicoRows, 10);
 
   // ─── F12.3 — Alerts ───────────────────────────────────────────────────────
   const alerts: AlertItem[] = [];
@@ -175,10 +192,11 @@ export function PPEManagement() {
     return Object.keys(errors).length === 0;
   }
 
-  function handleSave() {
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
     if (!validateForm()) return;
-    const newEntrega: EntregaEPP = {
-      id: `EPP-${Date.now()}`,
+    const payload: Omit<EntregaEPP, 'id'> = {
       tecnico: form.tecnico,
       area: form.area,
       item: form.item,
@@ -186,11 +204,20 @@ export function PPEManagement() {
       cantidad: Number(form.cantidad),
       fechaEntrega: form.fechaEntrega,
       fechaReposicionProgramada: form.fechaReposicionProgramada,
-      entregadoPor: 'Carlos Mendoza',
+      entregadoPor: form.tecnico,
     };
-    setEntregas(prev => [newEntrega, ...prev]);
-    setShowFormModal(false);
-    resetForm();
+
+    setSaving(true);
+    try {
+      const created = await createEntregaEPP(payload);
+      setEntregas(prev => [created, ...prev]);
+      setShowFormModal(false);
+      resetForm();
+    } catch (err) {
+      console.error('[PPEManagement] Error al guardar entrega EPP:', err);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function isAlertRow(e: EntregaEPP): boolean {
@@ -226,7 +253,16 @@ export function PPEManagement() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
+      {/* Loading skeleton */}
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-20 gap-3">
+          <Loader2 className="h-8 w-8 text-amber-500 animate-spin" />
+          <p className="text-sm text-gray-500">Cargando entregas de EPP...</p>
+        </div>
+      )}
+
+      {!loading && <>
       {/* ── Header ── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
@@ -314,7 +350,7 @@ export function PPEManagement() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredEntregas.map(e => (
+                {pageEntregas.map(e => (
                   <tr
                     key={e.id}
                     className={`hover:bg-gray-50 transition-colors ${
@@ -345,6 +381,15 @@ export function PPEManagement() {
               </tbody>
             </table>
           </div>
+          <div className="px-4 py-3 border-t border-gray-100">
+            <Pagination
+              currentPage={entregasPage}
+              totalItems={totalEntregas}
+              pageSize={entregasPageSize}
+              onPageChange={setEntregasPage}
+              onPageSizeChange={setEntregasPageSize}
+            />
+          </div>
         </div>
       )}
 
@@ -369,7 +414,7 @@ export function PPEManagement() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {tecnicoRows.map(row => (
+                {pageTecnicoRows.map(row => (
                   <tr key={row.name} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-gray-800">{row.name}</td>
                     <td className="px-4 py-3 text-gray-600">{row.area}</td>
@@ -398,6 +443,15 @@ export function PPEManagement() {
                 </tr>
               </tbody>
             </table>
+          </div>
+          <div className="px-4 py-3 border-t border-gray-100">
+            <Pagination
+              currentPage={compPage}
+              totalItems={totalTecnicoRows}
+              pageSize={compPageSize}
+              onPageChange={setCompPage}
+              onPageSizeChange={setCompPageSize}
+            />
           </div>
         </div>
       )}
@@ -498,7 +552,7 @@ export function PPEManagement() {
                   }`}
                 >
                   <option value="">Seleccionar técnico...</option>
-                  {TECNICOS.map(t => (
+                  {tecnicosList.map(t => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
@@ -520,7 +574,7 @@ export function PPEManagement() {
                   }`}
                 >
                   <option value="">Seleccionar área...</option>
-                  {AREAS.map(a => (
+                  {areasList.map(a => (
                     <option key={a} value={a}>{a}</option>
                   ))}
                 </select>
@@ -542,7 +596,7 @@ export function PPEManagement() {
                   }`}
                 >
                   <option value="">Seleccionar ítem EPP...</option>
-                  {ITEMS_EPP.map(i => (
+                  {itemsEPP.map(i => (
                     <option key={i} value={i}>{i}</option>
                   ))}
                 </select>
@@ -564,7 +618,7 @@ export function PPEManagement() {
                   }`}
                 >
                   <option value="">Seleccionar categoría...</option>
-                  {CATEGORIAS_EPP.map(c => (
+                  {categoriasEPP.map(c => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
@@ -640,14 +694,17 @@ export function PPEManagement() {
               </button>
               <button
                 onClick={handleSave}
-                className="px-4 py-2 text-sm font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors"
+                disabled={saving}
+                className="px-4 py-2 text-sm font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                Guardar Entrega
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {saving ? 'Guardando...' : 'Guardar Entrega'}
               </button>
             </div>
           </div>
         </div>
       )}
+      </>}
     </div>
   );
 }

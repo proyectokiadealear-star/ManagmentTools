@@ -1,12 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, ArrowRightLeft, Shield, UserCircle, Plus, X, Save } from 'lucide-react';
-import { CustodyTransfer, mockTransfers } from '../../data/mockData';
+import { Users, ArrowRightLeft, Shield, UserCircle, Plus, X, Save, Loader2 } from 'lucide-react';
+import { CustodyTransfer } from '../../data/mockData';
+import { httpClient } from '../../services/httpClient';
 import { useAssets } from '@shared/context/AssetContext';
+
+interface MovimientoTransfer {
+  id: string;
+  activoId: string;
+  motivo: string;
+  usuarioNombre?: string;
+  fecha: string;
+  desde?: { areaId?: string; bahiaId?: string };
+  hasta: { areaId?: string; bahiaId?: string };
+}
 
 export function Custody() {
   const assets = useAssets();
-  const [transfers, setTransfers] = useState<CustodyTransfer[]>(mockTransfers);
+  const [transfers, setTransfers] = useState<CustodyTransfer[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [newTransfer, setNewTransfer] = useState<{
     assetId: string;
@@ -14,6 +26,35 @@ export function Custody() {
     toCustodio: string;
     autorizadoPor: string;
   }>({ assetId: '', fromCustodio: '', toCustodio: '', autorizadoPor: '' });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // Try loading all movements from backend
+        const movimientos = await httpClient.get<MovimientoTransfer[]>('/api/activos/movimientos');
+        if (!cancelled) {
+          const mapped: CustodyTransfer[] = movimientos.map((m) => ({
+            id: m.id,
+            assetId: m.activoId,
+            fromCustodio: m.desde?.areaId || 'N/A',
+            toCustodio: m.hasta?.areaId || m.motivo,
+            fecha: m.fecha?.split('T')[0] || '',
+            autorizadoPor: m.usuarioNombre || 'Sistema',
+          }));
+          setTransfers(mapped);
+        }
+      } catch {
+        // Backend not available — show empty state
+        if (!cancelled) {
+          setTransfers([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleAssetSelect = (assetId: string) => {
     const asset = assets.find(a => a.id === assetId);
@@ -24,8 +65,23 @@ export function Custody() {
     }));
   };
 
-  const handleSaveTransfer = (e: React.FormEvent) => {
+  const handleSaveTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
+    try {
+      // POST to backend
+      await httpClient.post(`/api/activos/${newTransfer.assetId}/transferir`, {
+        areaId: '',
+        bahiaId: '',
+        rackId: '',
+        motivo: `Transferencia de custodia: ${newTransfer.fromCustodio} → ${newTransfer.toCustodio}`,
+        nuevoCustodio: newTransfer.toCustodio,
+        autorizadoPor: newTransfer.autorizadoPor,
+      });
+    } catch {
+      // Backend offline — add locally
+      console.warn('[Custody] Backend offline, adding transfer locally');
+    }
+    // Add to local state regardless
     const transfer: CustodyTransfer = {
       id: `TR-${String(transfers.length + 1).padStart(3, '0')}`,
       assetId: newTransfer.assetId,
@@ -38,6 +94,14 @@ export function Custody() {
     setIsTransferModalOpen(false);
     setNewTransfer({ assetId: '', fromCustodio: '', toCustodio: '', autorizadoPor: '' });
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="animate-spin text-slate-400" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 max-w-7xl mx-auto">

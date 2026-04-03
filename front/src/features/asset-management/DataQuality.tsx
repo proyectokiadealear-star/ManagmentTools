@@ -1,12 +1,33 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   ShieldAlert,
   Database,
   AlertTriangle,
-  CheckCircle2 } from
-'lucide-react';
-import { dataQualityIssues } from '../../data/mockData';
+  CheckCircle2,
+  Loader2,
+} from 'lucide-react';
+import { DataQualityIssue } from '../../data/mockData';
+
 export function DataQuality() {
+  const [issues, setIssues] = useState<DataQualityIssue[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // TODO: Replace with real API endpoint when available
+        // const data = await httpClient.get<DataQualityIssue[]>('/api/activos/calidad');
+        // if (!cancelled) setIssues(data);
+        if (!cancelled) setIssues([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const containerVariants = {
     hidden: {
       opacity: 0
@@ -28,6 +49,15 @@ export function DataQuality() {
       y: 0
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="animate-spin text-slate-400" size={32} />
+      </div>
+    );
+  }
+
   return (
     <div className="p-8 max-w-7xl mx-auto">
       <div className="mb-8 flex items-start justify-between">
@@ -43,7 +73,7 @@ export function DataQuality() {
         </div>
         <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-2 rounded-lg flex items-center gap-2 font-medium text-sm shadow-sm">
           <Database size={18} />
-          {dataQualityIssues.length} Problemas Estructurales
+          {issues.length} Problemas Estructurales
         </div>
       </div>
 
@@ -53,7 +83,7 @@ export function DataQuality() {
         animate="show"
         className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        {dataQualityIssues.map((issue, index) =>
+        {issues.map((issue, index) =>
         <motion.div
           key={index}
           variants={itemVariants}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AlertTriangle,
@@ -10,7 +10,8 @@ import {
   Info,
   ShieldAlert,
 } from 'lucide-react';
-import { Asset, FallaCorrectiva, mockFallasCorrectivas } from '../../data/mockData';
+import { Asset, FallaCorrectiva } from '../../data/mockData';
+import { getFallas } from '../../services/maintenanceService';
 import { calcDepreciation } from '@shared/utils/depreciation';
 import { useAssets, useRole } from '@shared/context/AssetContext';
 
@@ -28,13 +29,33 @@ export function RepairVsReplace() {
   const assets = useAssets();
   const role = useRole();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [fallas, setFallas] = useState<FallaCorrectiva[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getFallas().then((data) => {
+      setFallas(data);
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="p-8 max-w-7xl mx-auto flex items-center justify-center min-h-[300px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-600 rounded-full animate-spin" />
+          <p className="text-sm text-slate-500">Cargando datos de fallas...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Build analysis for each asset that has a pending/repair falla
   const analyses: DecisionAnalysis[] = assets.map((asset) => {
     const dep = calcDepreciation(asset.valor, asset.fechaCompra, asset.vidaUtil);
     const valorActual = dep.currentValue;
     const porcentaje = dep.porcentajeDepreciado;
-    const falla = mockFallasCorrectivas.find(
+    const falla = fallas.find(
       (f) => f.assetId === asset.id && f.estado !== 'Resuelto'
     ) ?? null;
     const costoRep = falla ? falla.costoReparacion : 0;

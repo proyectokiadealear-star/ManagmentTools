@@ -1,175 +1,179 @@
-// maintenanceService.ts — Mock implementation. Swap fetch() calls for real API.
+// maintenanceService.ts — Real API calls
 
+import { httpClient } from './httpClient';
 import {
   MantenimientoPreventivo,
   FallaCorrectiva,
   CotizacionRegistro,
   ProformaServicio,
-  mockMantenimientos,
-  mockFallasCorrectivas,
-  mockCotizaciones,
 } from '../data/mockData';
-
-// ---------------------------------------------------------------------------
-// Mutable runtime store
-// ---------------------------------------------------------------------------
-
-let _mantenimientos: MantenimientoPreventivo[] = [...mockMantenimientos];
-let _fallas: FallaCorrectiva[] = [...mockFallasCorrectivas];
-let _cotizaciones: CotizacionRegistro[] = [...mockCotizaciones];
 
 // ---------------------------------------------------------------------------
 // Mantenimientos Preventivos
 // ---------------------------------------------------------------------------
 
 export async function getMantenimientos(): Promise<MantenimientoPreventivo[]> {
-  return _mantenimientos.map((m) => ({ ...m }));
+  return httpClient.get<MantenimientoPreventivo[]>('/api/mantenimientos/programacion');
 }
 
 export async function getMantenimientoById(
   id: string
 ): Promise<MantenimientoPreventivo | undefined> {
-  const item = _mantenimientos.find((m) => m.id === id);
-  return item ? { ...item } : undefined;
+  return httpClient.get<MantenimientoPreventivo>(`/api/mantenimientos/${id}`);
 }
 
 export async function updateMantenimiento(
   id: string,
   data: Partial<MantenimientoPreventivo>
 ): Promise<MantenimientoPreventivo> {
-  const index = _mantenimientos.findIndex((m) => m.id === id);
-  if (index === -1) {
-    throw new Error(`Mantenimiento con id "${id}" no encontrado.`);
-  }
-  _mantenimientos[index] = { ..._mantenimientos[index], ...data };
-  return { ..._mantenimientos[index] };
+  return httpClient.patch<MantenimientoPreventivo>(
+    `/api/mantenimientos/programacion/${id}`,
+    data
+  );
 }
 
 export async function marcarEjecutado(
   id: string,
   observacion?: string
 ): Promise<MantenimientoPreventivo> {
-  const index = _mantenimientos.findIndex((m) => m.id === id);
-  if (index === -1) {
-    throw new Error(`Mantenimiento con id "${id}" no encontrado.`);
-  }
-  _mantenimientos[index] = {
-    ..._mantenimientos[index],
-    ejecutado: true,
-    ...(observacion !== undefined ? { observacion } : {}),
-  };
-  return { ..._mantenimientos[index] };
+  return httpClient.post<MantenimientoPreventivo>('/api/mantenimientos', {
+    programacionId: id,
+    observacion,
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Fallas Correctivas
 // ---------------------------------------------------------------------------
 
-export async function getFallas(): Promise<FallaCorrectiva[]> {
-  return _fallas.map((f) => ({ ...f }));
+export async function getFallas(estado?: string): Promise<FallaCorrectiva[]> {
+  const query = estado ? `?estado=${encodeURIComponent(estado)}` : '';
+  return httpClient.get<FallaCorrectiva[]>(`/api/fallas${query}`);
 }
 
 export async function getFallaById(
   id: string
 ): Promise<FallaCorrectiva | undefined> {
-  const item = _fallas.find((f) => f.id === id);
-  return item ? { ...item } : undefined;
+  return httpClient.get<FallaCorrectiva>(`/api/fallas/${id}`);
 }
 
 export async function createFalla(
   data: Omit<FallaCorrectiva, 'id'>
 ): Promise<FallaCorrectiva> {
-  const newFalla: FallaCorrectiva = {
-    ...data,
-    id: `FC${Date.now()}`,
-  };
-  _fallas = [..._fallas, newFalla];
-  return { ...newFalla };
+  return httpClient.post<FallaCorrectiva>('/api/fallas', data);
 }
 
 export async function updateFalla(
   id: string,
   data: Partial<FallaCorrectiva>
 ): Promise<FallaCorrectiva> {
-  const index = _fallas.findIndex((f) => f.id === id);
-  if (index === -1) {
-    throw new Error(`Falla correctiva con id "${id}" no encontrada.`);
-  }
-  _fallas[index] = { ..._fallas[index], ...data };
-  return { ..._fallas[index] };
+  return httpClient.patch<FallaCorrectiva>(`/api/fallas/${id}`, data);
+}
+
+export async function getFallasMetricas(): Promise<Record<string, unknown>> {
+  return httpClient.get<Record<string, unknown>>('/api/fallas/metricas');
 }
 
 // ---------------------------------------------------------------------------
 // Cotizaciones
 // ---------------------------------------------------------------------------
 
-export async function getCotizaciones(): Promise<CotizacionRegistro[]> {
-  return _cotizaciones.map((c) => ({ ...c }));
+export async function getCotizaciones(estado?: string): Promise<CotizacionRegistro[]> {
+  const query = estado ? `?estado=${encodeURIComponent(estado)}` : '';
+  return httpClient.get<CotizacionRegistro[]>(`/api/cotizaciones${query}`);
 }
 
 export async function createCotizacion(
   data: Omit<CotizacionRegistro, 'id'>
 ): Promise<CotizacionRegistro> {
-  const newCotizacion: CotizacionRegistro = {
-    ...data,
-    id: `COT${Date.now()}`,
-  };
-  _cotizaciones = [..._cotizaciones, newCotizacion];
-  return { ...newCotizacion };
+  return httpClient.post<CotizacionRegistro>('/api/cotizaciones', data);
 }
+
+export async function addProformaToCotizacion(
+  cotizacionId: string,
+  proforma: Omit<ProformaServicio, 'id'>
+): Promise<CotizacionRegistro> {
+  return httpClient.patch<CotizacionRegistro>(
+    `/api/cotizaciones/${cotizacionId}/proforma`,
+    proforma
+  );
+}
+
+export async function seleccionarProforma(
+  cotizacionId: string,
+  indiceProforma: number
+): Promise<CotizacionRegistro> {
+  return httpClient.patch<CotizacionRegistro>(
+    `/api/cotizaciones/${cotizacionId}/seleccionar`,
+    { indiceProforma }
+  );
+}
+
+export async function aprobarCotizacion(
+  id: string,
+  body: Record<string, unknown> = {}
+): Promise<CotizacionRegistro> {
+  return httpClient.patch<CotizacionRegistro>(
+    `/api/cotizaciones/${id}/aprobar`,
+    body
+  );
+}
+
+export async function rechazarCotizacion(
+  id: string,
+  body: Record<string, unknown> = {}
+): Promise<CotizacionRegistro> {
+  return httpClient.patch<CotizacionRegistro>(
+    `/api/cotizaciones/${id}/rechazar`,
+    body
+  );
+}
+
+export async function ejecutarCotizacion(
+  id: string,
+  body: Record<string, unknown> = {}
+): Promise<CotizacionRegistro> {
+  return httpClient.patch<CotizacionRegistro>(
+    `/api/cotizaciones/${id}/ejecutar`,
+    body
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Legacy helpers (kept for backward compatibility)
+// ---------------------------------------------------------------------------
 
 export async function addProformaToFalla(
   fallaId: string,
   proforma: Omit<ProformaServicio, 'id'>
 ): Promise<FallaCorrectiva> {
-  const index = _fallas.findIndex((f) => f.id === fallaId);
-  if (index === -1) {
-    throw new Error(`Falla correctiva con id "${fallaId}" no encontrada.`);
-  }
-  const newProforma: ProformaServicio = {
-    ...proforma,
-    id: `PRF${Date.now()}`,
-  };
-  _fallas[index] = {
-    ..._fallas[index],
-    proformas: [...(_fallas[index].proformas ?? []), newProforma],
-  };
-  return { ..._fallas[index] };
+  const falla = await getFallaById(fallaId);
+  if (!falla) throw new Error(`Falla correctiva con id "${fallaId}" no encontrada.`);
+  const newProforma: ProformaServicio = { ...proforma, id: `PRF${Date.now()}` };
+  const updatedProformas = [...(falla.proformas ?? []), newProforma];
+  return updateFalla(fallaId, { proformas: updatedProformas });
 }
 
 export async function addProformaToMantenimiento(
   mantenimientoId: string,
   proforma: Omit<ProformaServicio, 'id'>
 ): Promise<MantenimientoPreventivo> {
-  const index = _mantenimientos.findIndex((m) => m.id === mantenimientoId);
-  if (index === -1) {
-    throw new Error(
-      `Mantenimiento con id "${mantenimientoId}" no encontrado.`
-    );
-  }
-  const newProforma: ProformaServicio = {
-    ...proforma,
-    id: `PRF${Date.now()}`,
-  };
-  _mantenimientos[index] = {
-    ..._mantenimientos[index],
-    proformas: [...(_mantenimientos[index].proformas ?? []), newProforma],
-  };
-  return { ..._mantenimientos[index] };
+  const mant = await getMantenimientoById(mantenimientoId);
+  if (!mant) throw new Error(`Mantenimiento con id "${mantenimientoId}" no encontrado.`);
+  const newProforma: ProformaServicio = { ...proforma, id: `PRF${Date.now()}` };
+  const updatedProformas = [...(mant.proformas ?? []), newProforma];
+  return updateMantenimiento(mantenimientoId, { proformas: updatedProformas });
 }
 
 export async function seleccionarProformaFalla(
   fallaId: string,
   proformaId: string
 ): Promise<FallaCorrectiva> {
-  const index = _fallas.findIndex((f) => f.id === fallaId);
-  if (index === -1) {
-    throw new Error(`Falla correctiva con id "${fallaId}" no encontrada.`);
-  }
-  const updatedProformas = (_fallas[index].proformas ?? []).map((p) => ({
+  const falla = await getFallaById(fallaId);
+  if (!falla) throw new Error(`Falla correctiva con id "${fallaId}" no encontrada.`);
+  const updatedProformas = (falla.proformas ?? []).map((p) => ({
     ...p,
     seleccionada: p.id === proformaId,
   }));
-  _fallas[index] = { ..._fallas[index], proformas: updatedProformas };
-  return { ..._fallas[index] };
+  return updateFalla(fallaId, { proformas: updatedProformas });
 }

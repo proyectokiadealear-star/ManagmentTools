@@ -1,143 +1,185 @@
-// toolService.ts — Mock implementation. Swap fetch() calls for real API.
+// toolService.ts — Real API calls via httpClient.
 
+import { httpClient } from './httpClient';
 import {
   SolicitudPrestamo,
   EstadoSolicitudPrestamo,
   InspeccionFotografica,
   ActaDevolucion,
-  mockPrestamos,
-  mockInspecciones,
-  mockActasDevolucion,
 } from '../data/mockData';
 
 // ---------------------------------------------------------------------------
-// Mutable runtime store (in-memory mock state)
+// Prestamos (SolicitudPrestamo)
 // ---------------------------------------------------------------------------
 
-let _prestamos: SolicitudPrestamo[] = [...mockPrestamos];
-let _inspecciones: InspeccionFotografica[] = [...mockInspecciones];
-let _actas: ActaDevolucion[] = [...mockActasDevolucion];
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const today = (): string => new Date().toISOString().split('T')[0];
-
-// ---------------------------------------------------------------------------
-// Préstamos (SolicitudPrestamo)
-// ---------------------------------------------------------------------------
-
-export async function getPrestamos(): Promise<SolicitudPrestamo[]> {
-  return _prestamos;
+export async function getPrestamos(
+  estado?: EstadoSolicitudPrestamo,
+): Promise<SolicitudPrestamo[]> {
+  const query = estado ? `?estado=${encodeURIComponent(estado)}` : '';
+  return httpClient.get<SolicitudPrestamo[]>(`/api/prestamos${query}`);
 }
 
-export async function getPrestamoById(id: string): Promise<SolicitudPrestamo | undefined> {
-  return _prestamos.find((p) => p.id === id);
+export async function getPrestamoById(
+  id: string,
+): Promise<SolicitudPrestamo | undefined> {
+  return httpClient.get<SolicitudPrestamo>(`/api/prestamos/${id}`);
+}
+
+export async function getPrestamosByHerramienta(
+  herramientaId: string,
+): Promise<SolicitudPrestamo[]> {
+  return httpClient.get<SolicitudPrestamo[]>(
+    `/api/prestamos/herramienta/${herramientaId}`,
+  );
 }
 
 export async function createPrestamo(
-  data: Omit<SolicitudPrestamo, 'id'>
+  data: Omit<SolicitudPrestamo, 'id'>,
 ): Promise<SolicitudPrestamo> {
-  const nuevo: SolicitudPrestamo = { id: `PR${Date.now()}`, ...data };
-  _prestamos = [..._prestamos, nuevo];
-  return nuevo;
-}
-
-export async function updatePrestamo(
-  id: string,
-  data: Partial<SolicitudPrestamo>
-): Promise<SolicitudPrestamo> {
-  const index = _prestamos.findIndex((p) => p.id === id);
-  if (index === -1) throw new Error(`Préstamo ${id} no encontrado`);
-  const actualizado: SolicitudPrestamo = { ..._prestamos[index], ...data };
-  _prestamos = [
-    ..._prestamos.slice(0, index),
-    actualizado,
-    ..._prestamos.slice(index + 1),
-  ];
-  return actualizado;
+  return httpClient.post<SolicitudPrestamo>('/api/prestamos', data);
 }
 
 export async function aprobarPrestamo(
   id: string,
   aprobadoPor: string,
-  firmaDigital: string
+  firmaDigital?: string,
 ): Promise<SolicitudPrestamo> {
-  return updatePrestamo(id, {
-    estado: 'Aprobado' as EstadoSolicitudPrestamo,
-    aprobadoPor,
-    firmaDigital,
-    fechaAprobacion: today(),
-  });
+  return httpClient.patch<SolicitudPrestamo>(
+    `/api/prestamos/${id}/aprobar`,
+    { aprobadoPor, firmaDigital },
+  );
 }
 
 export async function rechazarPrestamo(
   id: string,
-  motivo: string
+  motivo: string,
 ): Promise<SolicitudPrestamo> {
-  return updatePrestamo(id, {
-    estado: 'Rechazado' as EstadoSolicitudPrestamo,
-    motivoRechazo: motivo,
-  });
+  return httpClient.patch<SolicitudPrestamo>(
+    `/api/prestamos/${id}/rechazar`,
+    { motivo },
+  );
 }
 
 export async function registrarDevolucion(
   id: string,
-  params: { estadoDevolucion: string; observacion?: string; fotoUrl?: string }
+  params: { estadoDevolucion: string; observacion?: string; fotoUrl?: string },
 ): Promise<SolicitudPrestamo> {
-  return updatePrestamo(id, {
-    estado: 'Devuelto' as EstadoSolicitudPrestamo,
-    estadoDevolucion: params.estadoDevolucion as SolicitudPrestamo['estadoDevolucion'],
-    fechaDevolucionReal: today(),
-    ...(params.observacion !== undefined && { observacionDevolucion: params.observacion }),
-    ...(params.fotoUrl !== undefined && { fotoDevolucionUrl: params.fotoUrl }),
-  });
+  return httpClient.patch<SolicitudPrestamo>(
+    `/api/prestamos/${id}/devolucion`,
+    params,
+  );
+}
+
+export async function registrarRetiro(id: string): Promise<SolicitudPrestamo> {
+  return httpClient.patch<SolicitudPrestamo>(
+    `/api/prestamos/${id}/retiro`,
+  );
+}
+
+export async function registrarDano(
+  id: string,
+  data: { descripcionDano: string; costoEstimado?: number; sancion?: string },
+): Promise<SolicitudPrestamo> {
+  return httpClient.patch<SolicitudPrestamo>(
+    `/api/prestamos/${id}/dano`,
+    data,
+  );
+}
+
+export async function cerrarPrestamo(id: string): Promise<SolicitudPrestamo> {
+  return httpClient.patch<SolicitudPrestamo>(
+    `/api/prestamos/${id}/cerrar`,
+  );
 }
 
 // ---------------------------------------------------------------------------
-// Inspecciones Fotográficas
+// Inspecciones Fotograficas
 // ---------------------------------------------------------------------------
 
-export async function getInspecciones(): Promise<InspeccionFotografica[]> {
-  return _inspecciones;
+/**
+ * Backend returns discrepancias as objects { descripcion, tipo, ... }
+ * but the frontend InspeccionFotografica type expects string[].
+ * This normalizer ensures the data always matches the frontend type.
+ */
+function normalizeInspeccion(raw: unknown): InspeccionFotografica {
+  const r = raw as Record<string, unknown>;
+  const discArr = Array.isArray(r.discrepancias) ? r.discrepancias : [];
+  const discStrings: string[] = discArr.map((d: unknown) => {
+    if (typeof d === 'string') return d;
+    if (d && typeof d === 'object' && 'descripcion' in d) return (d as { descripcion: string }).descripcion;
+    return String(d);
+  });
+  return {
+    ...(r as unknown as InspeccionFotografica),
+    discrepancias: discStrings,
+    tieneDiscrepancias: discStrings.length > 0,
+  };
+}
+
+function normalizeInspecciones(raw: unknown[]): InspeccionFotografica[] {
+  return raw.map(normalizeInspeccion);
+}
+
+export async function getInspecciones(
+  estado?: string,
+): Promise<InspeccionFotografica[]> {
+  const query = estado ? `?estado=${encodeURIComponent(estado)}` : '';
+  const raw = await httpClient.get<unknown[]>(`/api/inspecciones${query}`);
+  return normalizeInspecciones(raw);
+}
+
+export async function getInspeccionesPendientes(): Promise<InspeccionFotografica[]> {
+  const raw = await httpClient.get<unknown[]>('/api/inspecciones/pendientes');
+  return normalizeInspecciones(raw);
 }
 
 export async function createInspeccion(
-  data: Omit<InspeccionFotografica, 'id'>
+  data: Omit<InspeccionFotografica, 'id'>,
 ): Promise<InspeccionFotografica> {
-  const nueva: InspeccionFotografica = { id: `INS${Date.now()}`, ...data };
-  _inspecciones = [..._inspecciones, nueva];
-  return nueva;
+  return httpClient.post<InspeccionFotografica>('/api/inspecciones', data);
 }
 
-export async function updateInspeccion(
+export async function agregarFoto(
   id: string,
-  data: Partial<InspeccionFotografica>
+  data: { fotoUrl: string; descripcion?: string },
 ): Promise<InspeccionFotografica> {
-  const index = _inspecciones.findIndex((i) => i.id === id);
-  if (index === -1) throw new Error(`Inspección ${id} no encontrada`);
-  const actualizada: InspeccionFotografica = { ..._inspecciones[index], ...data };
-  _inspecciones = [
-    ..._inspecciones.slice(0, index),
-    actualizada,
-    ..._inspecciones.slice(index + 1),
-  ];
-  return actualizada;
+  return httpClient.patch<InspeccionFotografica>(
+    `/api/inspecciones/${id}/foto`,
+    data,
+  );
+}
+
+export async function agregarDiscrepancia(
+  id: string,
+  data: { descripcion: string },
+): Promise<InspeccionFotografica> {
+  return httpClient.patch<InspeccionFotografica>(
+    `/api/inspecciones/${id}/discrepancia`,
+    data,
+  );
+}
+
+export async function completarInspeccion(
+  id: string,
+  data?: { observaciones?: string },
+): Promise<InspeccionFotografica> {
+  return httpClient.patch<InspeccionFotografica>(
+    `/api/inspecciones/${id}/completar`,
+    data ?? {},
+  );
 }
 
 // ---------------------------------------------------------------------------
-// Actas de Devolución
+// Actas de Devolucion
 // ---------------------------------------------------------------------------
 
 export async function getActas(): Promise<ActaDevolucion[]> {
-  return _actas;
+  // Backend has no bulk actas listing endpoint — actas are per-prestamo only
+  return [];
 }
 
 export async function createActa(
-  data: Omit<ActaDevolucion, 'id'>
+  data: Omit<ActaDevolucion, 'id'>,
 ): Promise<ActaDevolucion> {
-  const nueva: ActaDevolucion = { id: `ACTA${Date.now()}`, ...data };
-  _actas = [..._actas, nueva];
-  return nueva;
+  return httpClient.post<ActaDevolucion>('/api/prestamos/actas', data);
 }

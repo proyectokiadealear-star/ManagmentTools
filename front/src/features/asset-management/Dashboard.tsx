@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Package, AlertTriangle, CheckCircle2, DollarSign } from 'lucide-react';
 import { KPICard } from './KPICard';
 import { useAssets } from '@shared/context/AssetContext';
+import { AREA_LABELS } from '@shared/types/enums';
 
 export function Dashboard() {
   const assets = useAssets();
@@ -130,7 +131,7 @@ export function Dashboard() {
                       {asset.descripcion}
                     </td>
                     <td className="px-4 py-3 text-slate-500">
-                      {asset.area || asset.ubicacion}
+                      {asset.area ? AREA_LABELS[asset.area] : (asset.ubicacion || '—')}
                     </td>
                     <td className="px-4 py-3">
                       <span

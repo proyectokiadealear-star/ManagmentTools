@@ -1,17 +1,34 @@
+import { useState, FormEvent } from 'react';
 import { motion } from 'framer-motion';
-import { Wrench } from 'lucide-react';
-import type { UserRole } from '@shared/types/roles';
-import { roleProfiles } from '@shared/types/roles';
+import { Wrench, Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
+import { useAuth } from '@shared/context/AuthContext';
 
-export type { UserRole } from '@shared/types/roles';
-export type { RoleProfile } from '@shared/types/roles';
-export { roleProfiles } from '@shared/types/roles';
+export function LoginScreen() {
+  const { login, loading, error } = useAuth();
 
-interface LoginScreenProps {
-  onSelectRole: (role: UserRole) => void;
-}
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
 
-export function LoginScreen({ onSelectRole }: LoginScreenProps) {
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+
+    if (!email.trim() || !password.trim()) {
+      setLocalError('Por favor ingresa tu email y contraseña.');
+      return;
+    }
+
+    try {
+      await login(email.trim(), password);
+      // Navigation is handled by App.tsx after auth state updates
+    } catch {
+      // error already set in AuthContext
+    }
+  };
+
+  const displayError = localError || error;
+
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col items-center justify-center p-6">
       {/* Header */}
@@ -19,7 +36,7 @@ export function LoginScreen({ onSelectRole }: LoginScreenProps) {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="text-center mb-10"
+        className="text-center mb-8"
       >
         <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-500 rounded-2xl mb-4 shadow-lg shadow-amber-500/30">
           <Wrench size={32} className="text-slate-900" strokeWidth={2.5} />
@@ -28,70 +45,95 @@ export function LoginScreen({ onSelectRole }: LoginScreenProps) {
         <p className="text-slate-400 mt-1 text-sm font-medium uppercase tracking-widest">
           Sistema de Gestión de Activos
         </p>
-        <div className="mt-4 inline-block bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs px-4 py-1.5 rounded-full font-medium">
-          Prototipo de Evaluación — Selecciona tu perspectiva
-        </div>
       </motion.div>
 
-      {/* Role Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full max-w-4xl">
-        {roleProfiles.map((profile, i) => {
-          const Icon = profile.icon;
-          return (
-            <motion.button
-              key={profile.role}
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 * (i + 1), type: 'spring', stiffness: 260, damping: 22 }}
-              whileHover={{ scale: 1.03, y: -4 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => onSelectRole(profile.role)}
-              className={`group bg-white rounded-2xl p-6 text-left shadow-xl border-2 ${profile.borderColor} hover:shadow-2xl transition-all duration-200 cursor-pointer`}
-            >
-              {/* Avatar + Badge */}
-              <div className="flex items-center gap-4 mb-4">
-                <div className={`w-14 h-14 rounded-xl ${profile.bgColor} border ${profile.borderColor} flex items-center justify-center shadow-sm`}>
-                  <Icon size={28} className={profile.color} />
-                </div>
-                <div>
-                  <p className="font-bold text-slate-900 text-base">{profile.nombre}</p>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${profile.bgColor} ${profile.color} border ${profile.borderColor}`}>
-                    {profile.cargo}
-                  </span>
-                </div>
-              </div>
+      {/* Login Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15, type: 'spring', stiffness: 260, damping: 24 }}
+        className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-8"
+      >
+        <h2 className="text-xl font-bold text-slate-900 mb-6 text-center">Iniciar Sesión</h2>
 
-              {/* Descripción */}
-              <p className="text-sm text-slate-500 mb-4 leading-relaxed">{profile.descripcion}</p>
+        {/* Error Banner */}
+        {displayError && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-5"
+          >
+            <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+            <span>{displayError}</span>
+          </motion.div>
+        )}
 
-              {/* Accesos */}
-              <ul className="space-y-1.5">
-                {profile.accesos.map((acceso) => (
-                  <li key={acceso} className="flex items-start gap-2 text-xs text-slate-600">
-                    <span className={`mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${profile.bgColor.replace('bg-', 'bg-').replace('-50', '-400')}`}
-                      style={{ background: profile.role === 'personal' ? '#60a5fa' : profile.role === 'tecnico' ? '#f59e0b' : '#34d399' }}
-                    />
-                    {acceso}
-                  </li>
-                ))}
-              </ul>
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+          {/* Email */}
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1">
+              Correo electrónico
+            </label>
+            <div className="relative">
+              <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
+                placeholder="usuario@surmotor.com"
+                className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed transition"
+              />
+            </div>
+          </div>
 
-              {/* CTA */}
-              <div className={`mt-5 w-full py-2.5 rounded-xl text-sm font-bold text-center transition-all ${profile.bgColor} ${profile.color} border ${profile.borderColor} group-hover:shadow-md`}>
-                Entrar como {profile.cargo}
-              </div>
-            </motion.button>
-          );
-        })}
-      </div>
+          {/* Password */}
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1">
+              Contraseña
+            </label>
+            <div className="relative">
+              <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+                placeholder="••••••••"
+                className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed transition"
+              />
+            </div>
+          </div>
+
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-2.5 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-900 font-bold rounded-xl text-sm transition-all shadow-md shadow-amber-500/30 disabled:opacity-60 disabled:cursor-not-allowed mt-2"
+          >
+            {loading ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Iniciando…
+              </>
+            ) : (
+              'Entrar'
+            )}
+          </button>
+        </form>
+      </motion.div>
 
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.8 }}
-        className="mt-8 text-slate-500 text-xs text-center"
+        transition={{ delay: 0.5 }}
+        className="mt-6 text-slate-500 text-xs text-center"
       >
-        Este es un prototipo para evaluación de experiencia de usuario. No requiere contraseña.
+        Acceso restringido — solo personal autorizado de SURMOTOR
       </motion.p>
     </div>
   );
