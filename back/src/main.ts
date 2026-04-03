@@ -7,12 +7,17 @@ async function bootstrap() {
 
   app.enableCors({
     origin: [
+      // Local development
       'http://localhost:5173',
       'http://localhost:4173',
       'http://localhost:3001',
-      // Producción — agregar tu dominio real de Vercel aquí
+      // Producción — Vercel
+      'https://managment-tools-six.vercel.app',
+      // Cualquier preview deploy de Vercel
+      /\.vercel\.app$/,
+      // Variable de entorno como fallback adicional
       process.env.FRONTEND_URL,
-    ].filter(Boolean) as string[],
+    ].filter(Boolean) as (string | RegExp)[],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
