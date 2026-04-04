@@ -1,10 +1,11 @@
 // UsuarioFormModal.tsx — Modal para crear / editar un usuario
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, User } from 'lucide-react';
+import { X, Save, User, Eye, EyeOff, Copy, Check } from 'lucide-react';
 import {
   Usuario,
   CreateUsuarioPayload,
+  CreateUsuarioResponse,
   createUsuario,
   updateUsuario,
 } from '../../services/usuariosService';
@@ -28,7 +29,9 @@ const ROL_OPTIONS: { value: Usuario['rol']; label: string }[] = [
   { value: 'jefe',    label: 'Jefe de Taller' },
 ];
 
-const DEFAULT: CreateUsuarioPayload = {
+type FormState = CreateUsuarioPayload;
+
+const DEFAULT: FormState = {
   nombre:  '',
   email:   '',
   rol:     'personal',
@@ -36,17 +39,23 @@ const DEFAULT: CreateUsuarioPayload = {
   area:    AreaTaller.TALLER,
   activo:  true,
   fotoUrl: '',
+  password: '',
 };
 
 export function UsuarioFormModal({ isOpen, usuario, onClose, onSaved }: Props) {
-  const [form, setForm] = useState<CreateUsuarioPayload>(DEFAULT);
+  const [form, setForm] = useState<FormState>(DEFAULT);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Cuando se abre el modal, cargar datos del usuario a editar (o limpiar)
   useEffect(() => {
     if (isOpen) {
       setError(null);
+      setGeneratedPassword(null);
+      setCopied(false);
       if (usuario) {
         setForm({
           nombre:  usuario.nombre,
@@ -63,8 +72,16 @@ export function UsuarioFormModal({ isOpen, usuario, onClose, onSaved }: Props) {
     }
   }, [isOpen, usuario]);
 
-  const set = <K extends keyof CreateUsuarioPayload>(key: K, value: CreateUsuarioPayload[K]) =>
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
+
+  const handleCopyPassword = async () => {
+    if (generatedPassword) {
+      await navigator.clipboard.writeText(generatedPassword);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,17 +92,115 @@ export function UsuarioFormModal({ isOpen, usuario, onClose, onSaved }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const saved = usuario
-        ? await updateUsuario(usuario.id, form)
-        : await createUsuario(form);
-      onSaved(saved);
-      onClose();
+      if (usuario) {
+        // Editar — no enviar password
+        const { password: _pw, ...updatePayload } = form;
+        const saved = await updateUsuario(usuario.id, updatePayload);
+        onSaved(saved);
+        onClose();
+      } else {
+        // Crear — puede incluir password
+        const payload: CreateUsuarioPayload = { ...form };
+        if (!payload.password?.trim()) {
+          delete payload.password; // Se auto-generará en backend
+        }
+        const response: CreateUsuarioResponse = await createUsuario(payload);
+
+        if (response.passwordGenerado) {
+          // Mostrar la contraseña generada antes de cerrar
+          setGeneratedPassword(response.passwordGenerado);
+          onSaved(response);
+        } else {
+          onSaved(response);
+          onClose();
+        }
+      }
     } catch {
       setError('Error al guardar. Intente nuevamente.');
     } finally {
       setLoading(false);
     }
   };
+
+  // Vista de "contraseña generada" — se muestra después de crear el usuario
+  if (generatedPassword) {
+    return (
+      <AnimatePresence>
+        {isOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            />
+            <motion.div
+              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            >
+              <div className="px-6 py-4 border-b border-slate-100 bg-emerald-50">
+                <div className="flex items-center gap-3">
+                  <div className="bg-emerald-100 p-2 rounded-lg">
+                    <Check size={20} className="text-emerald-600" />
+                  </div>
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    Usuario creado exitosamente
+                  </h2>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-slate-600">
+                  Se generó una contraseña temporal para <strong>{form.email}</strong>.
+                  Comuníquela al usuario para que pueda iniciar sesión.
+                </p>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                  <label className="block text-xs font-medium text-slate-500 mb-1">
+                    Contraseña generada
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-lg font-mono font-semibold text-slate-900 tracking-wider">
+                      {generatedPassword}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={handleCopyPassword}
+                      className="p-2 rounded-lg hover:bg-slate-200 transition-colors"
+                      title="Copiar contraseña"
+                    >
+                      {copied ? (
+                        <Check size={18} className="text-emerald-600" />
+                      ) : (
+                        <Copy size={18} className="text-slate-500" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  ⚠️ Esta contraseña no se mostrará de nuevo. Asegúrese de copiarla antes de cerrar.
+                </p>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+                  >
+                    Entendido, cerrar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    );
+  }
 
   return (
     <AnimatePresence>
@@ -155,6 +270,38 @@ export function UsuarioFormModal({ isOpen, usuario, onClose, onSaved }: Props) {
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
               </div>
+
+              {/* Password — solo para nuevos usuarios */}
+              {!usuario && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Contraseña
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={form.password || ''}
+                      onChange={(e) => set('password', e.target.value)}
+                      placeholder="Dejar vacío para generar automáticamente"
+                      className="w-full px-3 py-2 pr-10 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-100 transition-colors"
+                    >
+                      {showPassword ? (
+                        <EyeOff size={16} className="text-slate-400" />
+                      ) : (
+                        <Eye size={16} className="text-slate-400" />
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Si no ingresa una contraseña, se generará una automática (ej: Surmotor1234#)
+                  </p>
+                </div>
+              )}
 
               {/* Rol */}
               <div>

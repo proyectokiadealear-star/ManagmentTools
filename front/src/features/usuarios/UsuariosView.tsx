@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Users, Plus, Edit, Trash2, ToggleLeft, ToggleRight,
-  Search, RefreshCw, ShieldCheck, ShieldOff,
+  Search, RefreshCw, ShieldCheck, ShieldOff, KeyRound, Copy, Check,
 } from 'lucide-react';
 import {
   Usuario,
@@ -11,6 +11,7 @@ import {
   desactivarUsuario,
   activarUsuario,
   deleteUsuario,
+  resetPasswordUsuario,
 } from '../../services/usuariosService';
 import { AREA_LABELS, SEDE_LABELS } from '@shared/types/enums';
 import { UsuarioFormModal } from './UsuarioFormModal';
@@ -60,6 +61,12 @@ export function UsuariosView() {
   // Confirmación eliminar
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  // Reset password
+  const [resetPwId, setResetPwId] = useState<string | null>(null);
+  const [resetPwResult, setResetPwResult] = useState<{ email: string; nuevaPassword: string } | null>(null);
+  const [resetPwLoading, setResetPwLoading] = useState(false);
+  const [resetPwCopied, setResetPwCopied] = useState(false);
+
   // ── Carga ──────────────────────────────────────────────────────────────────
   const load = async () => {
     setLoading(true);
@@ -99,6 +106,34 @@ export function UsuariosView() {
     await deleteUsuario(deleteId);
     setUsuarios((prev) => prev.filter((x) => x.id !== deleteId));
     setDeleteId(null);
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetPwId) return;
+    setResetPwLoading(true);
+    try {
+      const result = await resetPasswordUsuario(resetPwId);
+      setResetPwResult(result);
+    } catch {
+      setResetPwResult(null);
+    } finally {
+      setResetPwLoading(false);
+    }
+  };
+
+  const handleCopyResetPw = async () => {
+    if (resetPwResult) {
+      await navigator.clipboard.writeText(resetPwResult.nuevaPassword);
+      setResetPwCopied(true);
+      setTimeout(() => setResetPwCopied(false), 2000);
+    }
+  };
+
+  const closeResetPwDialog = () => {
+    setResetPwId(null);
+    setResetPwResult(null);
+    setResetPwCopied(false);
+    setResetPwLoading(false);
   };
 
   const handleSaved = (saved: Usuario) => {
@@ -313,6 +348,15 @@ export function UsuariosView() {
                             <Edit size={16} />
                           </button>
 
+                          {/* Reset Password */}
+                          <button
+                            onClick={() => setResetPwId(u.id)}
+                            title="Resetear contraseña"
+                            className="p-1.5 rounded-lg text-amber-500 hover:bg-amber-50 transition-colors"
+                          >
+                            <KeyRound size={16} />
+                          </button>
+
                           {/* Eliminar */}
                           <button
                             onClick={() => setDeleteId(u.id)}
@@ -366,6 +410,88 @@ export function UsuariosView() {
                 Eliminar
               </button>
             </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ── Reset Password dialog ── */}
+      {resetPwId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeResetPwDialog} />
+          <motion.div
+            className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm"
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+          >
+            {resetPwResult ? (
+              /* Resultado — mostrar nueva contraseña */
+              <>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="bg-emerald-100 p-2 rounded-lg">
+                    <Check size={18} className="text-emerald-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900">Contraseña reseteada</h3>
+                </div>
+                <p className="text-sm text-slate-500 mb-3">
+                  Nueva contraseña para <strong>{resetPwResult.email}</strong>:
+                </p>
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex items-center gap-2 mb-3">
+                  <code className="flex-1 text-lg font-mono font-semibold text-slate-900 tracking-wider">
+                    {resetPwResult.nuevaPassword}
+                  </code>
+                  <button
+                    onClick={handleCopyResetPw}
+                    className="p-2 rounded-lg hover:bg-slate-200 transition-colors"
+                    title="Copiar"
+                  >
+                    {resetPwCopied ? (
+                      <Check size={16} className="text-emerald-600" />
+                    ) : (
+                      <Copy size={16} className="text-slate-500" />
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                  ⚠️ Copie la contraseña antes de cerrar. No se mostrará de nuevo.
+                </p>
+                <div className="flex justify-end">
+                  <button
+                    onClick={closeResetPwDialog}
+                    className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+                  >
+                    Entendido
+                  </button>
+                </div>
+              </>
+            ) : (
+              /* Confirmación — preguntar antes de resetear */
+              <>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="bg-amber-100 p-2 rounded-lg">
+                    <KeyRound size={18} className="text-amber-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900">¿Resetear contraseña?</h3>
+                </div>
+                <p className="text-sm text-slate-500 mb-5">
+                  Se generará una nueva contraseña aleatoria. La contraseña actual del usuario dejará de funcionar.
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={closeResetPwDialog}
+                    className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleResetPassword}
+                    disabled={resetPwLoading}
+                    className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-60 transition-colors"
+                  >
+                    {resetPwLoading ? 'Reseteando…' : 'Resetear'}
+                  </button>
+                </div>
+              </>
+            )}
           </motion.div>
         </div>
       )}

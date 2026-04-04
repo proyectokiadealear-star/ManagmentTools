@@ -48,11 +48,12 @@ export class UsuariosController {
   @ApiOperation({
     summary: 'Crear un nuevo usuario',
     description:
-      'Crea el usuario en Firestore. Cuando se integre Firebase Authentication, ' +
-      'aquí también se llamará a createUser() y el UID resultante se guardará en `uid`.',
+      'Crea el usuario en Firebase Authentication (con password proporcionado o auto-generado) ' +
+      'y luego guarda el perfil en Firestore con el UID de Auth. ' +
+      'Si no se proporciona password, se genera uno automático (Surmotor + 4 dígitos + #) y se devuelve en la respuesta.',
   })
   @ApiBody({ type: CreateUsuarioDto })
-  @ApiResponse({ status: 201, description: 'Usuario creado' })
+  @ApiResponse({ status: 201, description: 'Usuario creado (incluye passwordGenerado si fue auto-generado)' })
   @ApiResponse({ status: 409, description: 'Email ya registrado' })
   create(@Body() dto: CreateUsuarioDto) {
     return this.usuariosService.create(dto);
@@ -61,7 +62,12 @@ export class UsuariosController {
   // ─── Actualización ────────────────────────────────────────────────────────────
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Actualizar datos de un usuario' })
+  @ApiOperation({
+    summary: 'Actualizar datos de un usuario',
+    description:
+      'Actualiza el perfil en Firestore y sincroniza cambios relevantes a Firebase Auth ' +
+      '(email, displayName, disabled).',
+  })
   @ApiParam({ name: 'id', description: 'ID del usuario' })
   @ApiBody({ type: UpdateUsuarioDto })
   @ApiResponse({ status: 200, description: 'Usuario actualizado' })
@@ -76,7 +82,8 @@ export class UsuariosController {
   @ApiOperation({
     summary: 'Desactivar un usuario',
     description:
-      'Marca activo=false. En producción con Firebase Auth, también llamará a disableUser(uid).',
+      'Marca activo=false en Firestore y disabled=true en Firebase Auth. ' +
+      'El usuario ya no podrá iniciar sesión.',
   })
   @ApiParam({ name: 'id', description: 'ID del usuario' })
   @ApiResponse({ status: 200, description: 'Usuario desactivado' })
@@ -88,12 +95,30 @@ export class UsuariosController {
   @ApiOperation({
     summary: 'Reactivar un usuario desactivado',
     description:
-      'Marca activo=true. En producción con Firebase Auth, también llamará a enableUser(uid).',
+      'Marca activo=true en Firestore y disabled=false en Firebase Auth. ' +
+      'El usuario podrá volver a iniciar sesión.',
   })
   @ApiParam({ name: 'id', description: 'ID del usuario' })
   @ApiResponse({ status: 200, description: 'Usuario reactivado' })
   activar(@Param('id') id: string) {
     return this.usuariosService.activar(id);
+  }
+
+  // ─── Reset Password ──────────────────────────────────────────────────────────
+
+  @Post(':id/reset-password')
+  @ApiOperation({
+    summary: 'Resetear contraseña de un usuario',
+    description:
+      'Genera una nueva contraseña aleatoria (Surmotor + 4 dígitos + #) y la asigna en Firebase Auth. ' +
+      'Devuelve la nueva contraseña para que el administrador la comunique al usuario.',
+  })
+  @ApiParam({ name: 'id', description: 'ID del usuario' })
+  @ApiResponse({ status: 201, description: 'Contraseña reseteada — devuelve { email, nuevaPassword }' })
+  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
+  @ApiResponse({ status: 500, description: 'Error al resetear (usuario sin UID o error de Auth)' })
+  resetPassword(@Param('id') id: string) {
+    return this.usuariosService.resetPassword(id);
   }
 
   // ─── Eliminación ─────────────────────────────────────────────────────────────
@@ -102,8 +127,8 @@ export class UsuariosController {
   @ApiOperation({
     summary: 'Eliminar un usuario permanentemente',
     description:
-      'Elimina el documento de Firestore. En producción con Firebase Auth, ' +
-      'también llamará a deleteUser(uid) para revocar el acceso de autenticación.',
+      'Elimina el usuario de Firebase Auth (revoca acceso) y de Firestore (borra perfil). ' +
+      'Esta operación es irreversible.',
   })
   @ApiParam({ name: 'id', description: 'ID del usuario' })
   @ApiResponse({ status: 200, description: 'Usuario eliminado' })

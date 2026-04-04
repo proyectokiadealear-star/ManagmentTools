@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  InternalServerErrorException,
   OnModuleInit,
   Logger,
 } from '@nestjs/common';
@@ -25,6 +26,19 @@ export class UsuariosService implements OnModuleInit {
 
   private get firestore() {
     return this.firebaseService.getFirestore();
+  }
+
+  private get auth() {
+    return this.firebaseService.getAuth();
+  }
+
+  /**
+   * Genera una contraseña por defecto: Surmotor + 4 dígitos + #
+   * Ejemplo: Surmotor3847#
+   */
+  private generateDefaultPassword(): string {
+    const digits = Math.floor(1000 + Math.random() * 9000);
+    return `Surmotor${digits}#`;
   }
 
   // ─── CRUD ────────────────────────────────────────────────────────────────────
@@ -61,16 +75,64 @@ export class UsuariosService implements OnModuleInit {
     return todos.filter(u => u.area === area);
   }
 
-  async create(dto: CreateUsuarioDto): Promise<Usuario> {
-    // Verificar email único
+  /**
+   * Crear usuario — sincroniza Firebase Auth + Firestore.
+   *
+   * Flujo:
+   * 1. Verificar email único en Firestore
+   * 2. Crear usuario en Firebase Auth (con password proporcionado o generado)
+   * 3. Guardar en Firestore con el UID de Firebase Auth
+   *
+   * Retorna el usuario creado + la contraseña generada (solo si se auto-generó).
+   */
+  async create(dto: CreateUsuarioDto): Promise<Usuario & { passwordGenerado?: string }> {
+    // 1. Verificar email único en Firestore
     const existente = await this.findByEmail(dto.email);
     if (existente) {
       throw new ConflictException(`Ya existe un usuario con el email ${dto.email}`);
     }
 
+    const password = dto.password || this.generateDefaultPassword();
+    const passwordFueGenerado = !dto.password;
+    let uid = '';
+
+    // 2. Crear en Firebase Auth
+    try {
+      const userRecord = await this.auth.createUser({
+        email: dto.email,
+        password,
+        displayName: dto.nombre,
+        disabled: dto.activo === false,
+      });
+      uid = userRecord.uid;
+      this.logger.log(`Firebase Auth: usuario creado → ${dto.email} (uid=${uid})`);
+    } catch (err: any) {
+      if (err.code === 'auth/email-already-exists') {
+        // El email ya existe en Auth pero no en Firestore — vincular
+        try {
+          const existing = await this.auth.getUserByEmail(dto.email);
+          uid = existing.uid;
+          this.logger.warn(
+            `Firebase Auth: email ${dto.email} ya existía (uid=${uid}), vinculando a Firestore`,
+          );
+        } catch {
+          this.logger.error(`No se pudo recuperar uid para ${dto.email}`);
+          throw new InternalServerErrorException(
+            `El email ${dto.email} existe en Firebase Auth pero no se puede vincular`,
+          );
+        }
+      } else {
+        this.logger.error(`Firebase Auth error al crear ${dto.email}: ${err.message}`);
+        throw new InternalServerErrorException(
+          `Error creando usuario en Firebase Auth: ${err.message}`,
+        );
+      }
+    }
+
+    // 3. Guardar en Firestore
     const now = new Date().toISOString();
     const nuevoUsuario: Omit<Usuario, 'id'> = {
-      uid: '',                          // Se llenará cuando se conecte Firebase Auth
+      uid,
       nombre: dto.nombre,
       email: dto.email,
       rol: dto.rol,
@@ -83,9 +145,24 @@ export class UsuariosService implements OnModuleInit {
     };
 
     const docRef = await this.firestore.collection('usuarios').add(nuevoUsuario);
-    return { id: docRef.id, ...nuevoUsuario };
+    const resultado: Usuario & { passwordGenerado?: string } = {
+      id: docRef.id,
+      ...nuevoUsuario,
+    };
+
+    if (passwordFueGenerado) {
+      resultado.passwordGenerado = password;
+    }
+
+    this.logger.log(`Usuario creado en Firestore: ${docRef.id} (uid=${uid})`);
+    return resultado;
   }
 
+  /**
+   * Actualizar usuario — sincroniza cambios relevantes a Firebase Auth.
+   *
+   * Sincroniza a Auth: email, nombre (displayName), activo (disabled).
+   */
   async update(id: string, dto: UpdateUsuarioDto): Promise<Usuario> {
     const existente = await this.findOne(id);
 
@@ -95,6 +172,36 @@ export class UsuariosService implements OnModuleInit {
       if (emailOcupado) {
         throw new ConflictException(`El email ${dto.email} ya está en uso`);
       }
+    }
+
+    // Sincronizar cambios relevantes a Firebase Auth
+    if (existente.uid) {
+      const authUpdate: Record<string, any> = {};
+      if (dto.email && dto.email !== existente.email) authUpdate.email = dto.email;
+      if (dto.nombre && dto.nombre !== existente.nombre) authUpdate.displayName = dto.nombre;
+      if (dto.activo !== undefined && dto.activo !== existente.activo)
+        authUpdate.disabled = !dto.activo;
+
+      if (Object.keys(authUpdate).length > 0) {
+        try {
+          await this.auth.updateUser(existente.uid, authUpdate);
+          this.logger.log(
+            `Firebase Auth: usuario actualizado (uid=${existente.uid}) → ${JSON.stringify(authUpdate)}`,
+          );
+        } catch (err: any) {
+          this.logger.error(
+            `Firebase Auth: error actualizando uid=${existente.uid}: ${err.message}`,
+          );
+          // No lanzar error — actualizar Firestore de todos modos y logear la advertencia
+          this.logger.warn(
+            'Se actualizará Firestore pero Firebase Auth quedó desincronizado.',
+          );
+        }
+      }
+    } else {
+      this.logger.warn(
+        `Usuario ${id} no tiene uid de Firebase Auth — solo se actualiza Firestore`,
+      );
     }
 
     const actualizado: Usuario = {
@@ -107,26 +214,111 @@ export class UsuariosService implements OnModuleInit {
     return actualizado;
   }
 
+  /**
+   * Eliminar usuario — borra de Firebase Auth y Firestore.
+   */
   async remove(id: string): Promise<{ id: string; mensaje: string }> {
-    await this.findOne(id); // lanza 404 si no existe
+    const usuario = await this.findOne(id);
+
+    // Eliminar de Firebase Auth primero
+    if (usuario.uid) {
+      try {
+        await this.auth.deleteUser(usuario.uid);
+        this.logger.log(`Firebase Auth: usuario eliminado (uid=${usuario.uid}, email=${usuario.email})`);
+      } catch (err: any) {
+        this.logger.error(
+          `Firebase Auth: error eliminando uid=${usuario.uid}: ${err.message}`,
+        );
+        // Continuar con la eliminación de Firestore
+      }
+    }
+
     await this.firestore.collection('usuarios').doc(id).delete();
-    return { id, mensaje: `Usuario ${id} eliminado correctamente` };
+    return { id, mensaje: `Usuario ${id} (${usuario.email}) eliminado correctamente` };
   }
 
   /**
-   * Desactiva un usuario sin eliminarlo del sistema.
-   * En el futuro: también llamará a Firebase Auth Admin SDK → disableUser(uid)
+   * Desactivar usuario — marca activo=false en Firestore y disabled=true en Firebase Auth.
    */
   async desactivar(id: string): Promise<Usuario> {
-    return this.update(id, { activo: false });
+    const usuario = await this.findOne(id);
+
+    // Desactivar en Firebase Auth
+    if (usuario.uid) {
+      try {
+        await this.auth.updateUser(usuario.uid, { disabled: true });
+        this.logger.log(`Firebase Auth: usuario desactivado (uid=${usuario.uid})`);
+      } catch (err: any) {
+        this.logger.error(
+          `Firebase Auth: error desactivando uid=${usuario.uid}: ${err.message}`,
+        );
+      }
+    }
+
+    const actualizado: Usuario = {
+      ...usuario,
+      activo: false,
+      updatedAt: new Date().toISOString(),
+    };
+    await this.firestore.collection('usuarios').doc(id).update(actualizado as any);
+    return actualizado;
   }
 
   /**
-   * Reactiva un usuario desactivado.
-   * En el futuro: también llamará a Firebase Auth Admin SDK → enableUser(uid)
+   * Reactivar usuario — marca activo=true en Firestore y disabled=false en Firebase Auth.
    */
   async activar(id: string): Promise<Usuario> {
-    return this.update(id, { activo: true });
+    const usuario = await this.findOne(id);
+
+    // Reactivar en Firebase Auth
+    if (usuario.uid) {
+      try {
+        await this.auth.updateUser(usuario.uid, { disabled: false });
+        this.logger.log(`Firebase Auth: usuario reactivado (uid=${usuario.uid})`);
+      } catch (err: any) {
+        this.logger.error(
+          `Firebase Auth: error reactivando uid=${usuario.uid}: ${err.message}`,
+        );
+      }
+    }
+
+    const actualizado: Usuario = {
+      ...usuario,
+      activo: true,
+      updatedAt: new Date().toISOString(),
+    };
+    await this.firestore.collection('usuarios').doc(id).update(actualizado as any);
+    return actualizado;
+  }
+
+  /**
+   * Resetear contraseña de un usuario en Firebase Auth.
+   * Genera una nueva contraseña y la devuelve para que el admin la comunique al usuario.
+   */
+  async resetPassword(id: string): Promise<{ email: string; nuevaPassword: string }> {
+    const usuario = await this.findOne(id);
+
+    if (!usuario.uid) {
+      throw new InternalServerErrorException(
+        `El usuario ${id} (${usuario.email}) no tiene UID de Firebase Auth — no se puede resetear la contraseña`,
+      );
+    }
+
+    const nuevaPassword = this.generateDefaultPassword();
+
+    try {
+      await this.auth.updateUser(usuario.uid, { password: nuevaPassword });
+      this.logger.log(`Firebase Auth: contraseña reseteada para ${usuario.email}`);
+    } catch (err: any) {
+      this.logger.error(
+        `Firebase Auth: error reseteando password uid=${usuario.uid}: ${err.message}`,
+      );
+      throw new InternalServerErrorException(
+        `Error reseteando contraseña: ${err.message}`,
+      );
+    }
+
+    return { email: usuario.email, nuevaPassword };
   }
 
   // ─── Seed ────────────────────────────────────────────────────────────────────
@@ -224,7 +416,6 @@ export class UsuariosService implements OnModuleInit {
    */
   async resetAndSeed(): Promise<{ usuarios: number; mensaje: string }> {
     const existentes = await this.findAll();
-    const auth = this.firebaseService.getAuth();
 
     // Borrar Firestore
     const batch = this.firestore.batch();
@@ -237,7 +428,7 @@ export class UsuariosService implements OnModuleInit {
     for (const u of existentes) {
       if (u.uid) {
         try {
-          await auth.deleteUser(u.uid);
+          await this.auth.deleteUser(u.uid);
           this.logger.log(`Firebase Auth: usuario eliminado → ${u.email}`);
         } catch (err: any) {
           this.logger.warn(`No se pudo eliminar ${u.email} de Auth: ${err.message}`);
@@ -261,7 +452,6 @@ export class UsuariosService implements OnModuleInit {
     }
 
     const now = new Date().toISOString();
-    const auth = this.firebaseService.getAuth();
     let creados = 0;
 
     for (const u of this.seedUsers) {
@@ -269,7 +459,7 @@ export class UsuariosService implements OnModuleInit {
 
       try {
         // Intentar crear en Firebase Auth
-        const userRecord = await auth.createUser({
+        const userRecord = await this.auth.createUser({
           email: u.email,
           password: u.password,
           displayName: u.nombre,
@@ -281,7 +471,7 @@ export class UsuariosService implements OnModuleInit {
         if (err.code === 'auth/email-already-exists') {
           // Ya existe en Auth — obtener uid
           try {
-            const existing = await auth.getUserByEmail(u.email);
+            const existing = await this.auth.getUserByEmail(u.email);
             uid = existing.uid;
             this.logger.log(`Firebase Auth: usuario ya existe → ${u.email}, uid=${uid}`);
           } catch {
@@ -312,7 +502,7 @@ export class UsuariosService implements OnModuleInit {
     this.logger.log(`Seed completado: ${creados} usuarios insertados.`);
     return {
       usuarios: creados,
-      mensaje: `Seed completado: ${creados} usuarios creados en Firestore${auth.createUser ? ' y Firebase Auth' : ' (modo demo)'}.`,
+      mensaje: `Seed completado: ${creados} usuarios creados en Firestore y Firebase Auth.`,
     };
   }
 }

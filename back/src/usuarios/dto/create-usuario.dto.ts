@@ -21,6 +21,13 @@ export class CreateUsuarioDto {
   @ApiProperty({ enum: AreaTallerEnum, example: AreaTallerEnum.TALLER, description: 'Área del taller asignada' })
   area: AreaTaller;
 
+  @ApiPropertyOptional({
+    example: 'MiPassword2024#',
+    description:
+      'Contraseña inicial para Firebase Auth. Si no se proporciona, se genera automáticamente (Surmotor + 4 dígitos + #).',
+  })
+  password?: string;
+
   @ApiPropertyOptional({ example: true, description: 'true = activo, false = desactivado' })
   activo?: boolean;
 

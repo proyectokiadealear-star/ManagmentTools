@@ -20,8 +20,21 @@ export interface Usuario {
   updatedAt: string;
 }
 
-export type CreateUsuarioPayload = Omit<Usuario, 'id' | 'uid' | 'createdAt' | 'updatedAt'>;
-export type UpdateUsuarioPayload = Partial<CreateUsuarioPayload>;
+export type CreateUsuarioPayload = Omit<Usuario, 'id' | 'uid' | 'createdAt' | 'updatedAt'> & {
+  password?: string;
+};
+export type UpdateUsuarioPayload = Partial<Omit<CreateUsuarioPayload, 'password'>>;
+
+/** Respuesta del create cuando la contraseña fue auto-generada */
+export interface CreateUsuarioResponse extends Usuario {
+  passwordGenerado?: string;
+}
+
+/** Respuesta del reset-password */
+export interface ResetPasswordResponse {
+  email: string;
+  nuevaPassword: string;
+}
 
 const BASE = '/api/usuarios';
 
@@ -36,8 +49,8 @@ export async function getUsuario(id: string): Promise<Usuario> {
   return httpClient.get<Usuario>(`${BASE}/${id}`);
 }
 
-export async function createUsuario(payload: CreateUsuarioPayload): Promise<Usuario> {
-  return httpClient.post<Usuario>(BASE, payload);
+export async function createUsuario(payload: CreateUsuarioPayload): Promise<CreateUsuarioResponse> {
+  return httpClient.post<CreateUsuarioResponse>(BASE, payload);
 }
 
 export async function updateUsuario(id: string, payload: UpdateUsuarioPayload): Promise<Usuario> {
@@ -58,4 +71,8 @@ export async function deleteUsuario(id: string): Promise<void> {
 
 export async function seedUsuarios(): Promise<{ message: string }> {
   return httpClient.post<{ message: string }>(`${BASE}/seed`);
+}
+
+export async function resetPasswordUsuario(id: string): Promise<ResetPasswordResponse> {
+  return httpClient.post<ResetPasswordResponse>(`${BASE}/${id}/reset-password`);
 }
