@@ -72,7 +72,12 @@ export class AssetsService {
       usuarioId,
     };
 
-    const docRef = await this.firestore.collection('activos').add(activo);
+    // Firestore no acepta valores undefined — eliminarlos antes de escribir
+    const cleanData = Object.fromEntries(
+      Object.entries(activo).filter(([, v]) => v !== undefined),
+    );
+
+    const docRef = await this.firestore.collection('activos').add(cleanData);
     return { id: docRef.id, ...activo };
   }
 
@@ -86,7 +91,11 @@ export class AssetsService {
       updatedAt: new Date().toISOString(),
     };
 
-    await this.firestore.collection('activos').doc(id).update(actualizado as any);
+    const cleanUpdate = Object.fromEntries(
+      Object.entries(actualizado).filter(([, v]) => v !== undefined),
+    );
+
+    await this.firestore.collection('activos').doc(id).update(cleanUpdate);
     return actualizado;
   }
 

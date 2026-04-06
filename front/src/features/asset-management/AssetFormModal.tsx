@@ -4,6 +4,9 @@ import { X, Save, ImagePlus, Trash2, Upload, Loader2 } from 'lucide-react';
 import { Asset } from '../../data/mockData';
 import { uploadActivoImagen, getAreas, getBahias, getRacks, getCajas, AreaAPI, BahiaAPI, RackAPI, CajaAPI } from '../../services/assetService';
 import { getCatalogos, CatalogoItem } from '../../services/catalogoService';
+import { getUsuarios, Usuario } from '../../services/usuariosService';
+
+const FORM_CACHE_KEY = 'asset-form-draft';
 interface AssetFormModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -63,12 +66,16 @@ export function AssetFormModal({
   const [racks, setRacks] = useState<RackAPI[]>([]);
   const [cajas, setCajas] = useState<CajaAPI[]>([]);
 
-  // Cargar catálogos al montar
+  // ── Usuarios activos (para custodio) ──
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+
+  // Cargar catálogos y usuarios al montar
   useEffect(() => {
     getCatalogos('tipo-activo').then(setTiposActivo).catch(() => {});
     getCatalogos('marca').then(setMarcas).catch(() => {});
     getCatalogos('proveedor').then(setProveedores).catch(() => {});
     getAreas().then(setAreas).catch(() => {});
+    getUsuarios().then(u => setUsuarios(u.filter(x => x.activo))).catch(() => {});
   }, []);
 
   // Cargar modelos cuando cambia la marca seleccionada
@@ -102,6 +109,7 @@ export function AssetFormModal({
     getCajas(formData.rack).then(setCajas).catch(() => {});
     setFormData(prev => ({ ...prev, caja: '' }));
   }, [formData.rack]);
+  // Restaurar borrador de sessionStorage al abrir sin initialData
   useEffect(() => {
     if (isOpen) {
       setImgError(false);
@@ -109,15 +117,27 @@ export function AssetFormModal({
       if (initialData) {
         setFormData(initialData);
       } else {
-        setFormData({
-          ...defaultAsset,
-          id: `A${Math.floor(Math.random() * 10000).
-          toString().
-          padStart(4, '0')}`
-        });
+        const cached = sessionStorage.getItem(FORM_CACHE_KEY);
+        if (cached) {
+          try {
+            setFormData(JSON.parse(cached));
+          } catch {
+            sessionStorage.removeItem(FORM_CACHE_KEY);
+            setFormData({ ...defaultAsset, id: `A${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}` });
+          }
+        } else {
+          setFormData({ ...defaultAsset, id: `A${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}` });
+        }
       }
     }
   }, [isOpen, initialData]);
+
+  // Guardar borrador en sessionStorage mientras se llena el formulario
+  useEffect(() => {
+    if (isOpen && !initialData && formData.codigo !== undefined) {
+      sessionStorage.setItem(FORM_CACHE_KEY, JSON.stringify(formData));
+    }
+  }, [formData, isOpen, initialData]);
   const handleChange = (
   e: React.ChangeEvent<
     HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
@@ -131,7 +151,8 @@ export function AssetFormModal({
   };
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // onSave is responsible for closing the modal (may be async)
+    // Limpiar borrador al guardar exitosamente
+    sessionStorage.removeItem(FORM_CACHE_KEY);
     onSave(formData as Asset);
   };
 
@@ -543,14 +564,9 @@ export function AssetFormModal({
                       onChange={handleChange}
                       className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500">
                       <option value="">-- Seleccionar persona --</option>
-                      <option value="Carlos Mendoza">Carlos Mendoza</option>
-                      <option value="Ana Torres">Ana Torres</option>
-                      <option value="Luis Pérez">Luis Pérez</option>
-                      <option value="Roberto Gómez">Roberto Gómez</option>
-                      <option value="Miguel Sánchez">Miguel Sánchez</option>
-                      <option value="Bodeguero / Repuestos SURMOTOR">Bodeguero / Repuestos SURMOTOR</option>
-                      <option value="Soporte IT">Soporte IT</option>
-                      <option value="Bodega Central">Bodega Central</option>
+                      {usuarios.map(u => (
+                        <option key={u.id} value={u.nombre}>{u.nombre} — {u.rol}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="md:col-span-2 flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-700">
