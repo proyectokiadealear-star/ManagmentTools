@@ -152,8 +152,35 @@ class MockFirestore {
 }
 
 class MockAuth {
+  private users: Map<string, { uid: string; email: string; displayName?: string; disabled?: boolean }> = new Map();
+
   async verifyIdToken(_token: string): Promise<any> {
     return { uid: 'demo-user', email: 'demo@demo.com' };
+  }
+
+  async createUser(props: { email: string; password: string; displayName?: string; disabled?: boolean }): Promise<{ uid: string }> {
+    const uid = `mock_uid_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    this.users.set(uid, { uid, email: props.email, displayName: props.displayName, disabled: props.disabled });
+    return { uid };
+  }
+
+  async getUserByEmail(email: string): Promise<{ uid: string }> {
+    for (const user of this.users.values()) {
+      if (user.email === email) return { uid: user.uid };
+    }
+    const err: any = new Error(`No user found for email ${email}`);
+    err.code = 'auth/user-not-found';
+    throw err;
+  }
+
+  async updateUser(uid: string, props: Record<string, any>): Promise<{ uid: string }> {
+    const user = this.users.get(uid);
+    if (user) Object.assign(user, props);
+    return { uid };
+  }
+
+  async deleteUser(uid: string): Promise<void> {
+    this.users.delete(uid);
   }
 }
 
