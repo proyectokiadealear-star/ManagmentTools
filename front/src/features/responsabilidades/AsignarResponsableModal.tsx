@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, UserCheck, AlertTriangle, RefreshCw, Users, Loader2 } from 'lucide-react';
 import {
   PeriodoResponsabilidad,
-  PersonalTaller,
   PermisoResponsabilidad,
   NivelResponsabilidad,
   TipoAsignacion,
@@ -13,6 +12,7 @@ import {
   asignarResponsable,
   reasignarResponsable,
 } from '../../services/responsabilidadService';
+import { Usuario } from '../../services/usuariosService';
 
 const AREAS = ['Taller', 'Bodega', 'EV / Híbridos', 'Recepción', 'Alineación', 'Otra'];
 const TODOS_PERMISOS: PermisoResponsabilidad[] = [
@@ -27,7 +27,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (p: PeriodoResponsabilidad, tipo: 'nueva' | 'reasignada') => void;
-  personal: PersonalTaller[];
+  personal: Usuario[];
   periodos: PeriodoResponsabilidad[];
   periodoEditar?: PeriodoResponsabilidad;
 }
@@ -302,7 +302,7 @@ export function AsignarResponsableModal({
                     <option value="">Seleccionar persona…</option>
                     {personal.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.nombre} — {p.cargo}
+                        {p.nombre} — {p.rol}
                       </option>
                     ))}
                   </select>

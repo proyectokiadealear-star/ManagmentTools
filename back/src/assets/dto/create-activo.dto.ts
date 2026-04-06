@@ -89,13 +89,15 @@ export class CreateActivoDto {
   @IsString()
   areaId: string;
 
-  @ApiProperty({ example: 'bahia-1', description: 'ID de la bahía' })
+  @ApiPropertyOptional({ example: 'bahia-1', description: 'ID de la bahía' })
+  @IsOptional()
   @IsString()
-  bahiaId: string;
+  bahiaId?: string;
 
-  @ApiProperty({ example: 'rack-a', description: 'ID del rack / estante' })
+  @ApiPropertyOptional({ example: 'rack-a', description: 'ID del rack / estante' })
+  @IsOptional()
   @IsString()
-  rackId: string;
+  rackId?: string;
 
   @ApiPropertyOptional({ example: 'caja-001', description: 'ID de la caja / posición final' })
   @IsOptional()

@@ -494,7 +494,7 @@ export function AssetFormModal({
                   </div>
                 </div>
                 <div className="mt-3 px-3 py-2 bg-blue-50 border border-blue-100 rounded-md text-xs text-blue-600">
-                  Jerarquía: Área → Bahía → Rack → Caja (F1.1)
+                  Jerarquía: Área (obligatorio) → Bahía → Rack → Caja (opcionales). Los equipos grandes pueden asignarse solo a un área.
                 </div>
                 <div className="mt-4">
                   <label className="block text-xs font-medium text-slate-700 mb-1">

@@ -28,8 +28,8 @@ export interface ActivoAPI {
   periodicidad?: string;
   itemProveedor?: string;
   areaId: string;
-  bahiaId: string;
-  rackId: string;
+  bahiaId?: string;
+  rackId?: string;
   cajaId?: string;
   responsable?: string;
   custodio?: string;
@@ -73,9 +73,9 @@ export interface DisponibilidadResponse {
 export interface UbicacionAPI {
   areaId: string;
   areaNombre?: string;
-  bahiaId: string;
+  bahiaId?: string;
   bahiaNombre?: string;
-  rackId: string;
+  rackId?: string;
   rackNombre?: string;
   cajaId?: string;
   cajaNumero?: string;
@@ -146,6 +146,51 @@ export function mapActivoToAsset(a: ActivoAPI): Asset {
   };
 }
 
+/**
+ * Reverse mapping: frontend Asset → backend CreateActivoDto / UpdateActivoDto.
+ *
+ * Key renames:
+ *  - frontend `descripcion` → backend `nombre`
+ *  - frontend `area`        → backend `areaId`
+ *  - frontend `bahia`       → backend `bahiaId`
+ *  - frontend `rack`        → backend `rackId`
+ *  - frontend `caja`        → backend `cajaId`
+ */
+function mapAssetToDto(data: Partial<Asset>): Record<string, unknown> {
+  const dto: Record<string, unknown> = {};
+
+  // Rename mismatched fields
+  if (data.descripcion !== undefined) dto.nombre = data.descripcion;
+  if (data.area !== undefined)        dto.areaId = data.area || undefined;
+  if (data.bahia !== undefined)       dto.bahiaId = data.bahia || undefined;
+  if (data.rack !== undefined)        dto.rackId = data.rack || undefined;
+  if (data.caja !== undefined)        dto.cajaId = data.caja || undefined;
+
+  // Copy fields that share the same name
+  const directFields: (keyof Asset)[] = [
+    'codigo', 'tipo', 'marca', 'modelo', 'serial', 'placa',
+    'proveedor', 'factura', 'fechaCompra', 'valor', 'vidaUtil',
+    'capacidadEspecificacion', 'periodicidad', 'itemProveedor',
+    'responsable', 'custodio', 'encargado', 'comentario',
+    'observacion', 'imagenUrl',
+  ];
+  for (const key of directFields) {
+    if (data[key] !== undefined) dto[key] = data[key];
+  }
+
+  // Map frontend estado labels → backend enum values
+  if (data.estado !== undefined) {
+    const estadoMap: Record<string, string> = {
+      'Activo':        'activo',
+      'En Reparación': 'en-reparacion',
+      'Dado de Baja':  'dado-de-baja',
+    };
+    dto.estado = estadoMap[data.estado] ?? data.estado;
+  }
+
+  return dto;
+}
+
 // ==================== ASSETS ====================
 
 export async function getAssets(): Promise<Asset[]> {
@@ -159,11 +204,11 @@ export async function getAssetById(id: string): Promise<Asset | undefined> {
 }
 
 export async function createAsset(data: Omit<Asset, 'id'>): Promise<Asset> {
-  return mapActivoToAsset(await httpClient.post<ActivoAPI>('/api/activos', data));
+  return mapActivoToAsset(await httpClient.post<ActivoAPI>('/api/activos', mapAssetToDto(data)));
 }
 
 export async function updateAsset(id: string, data: Partial<Asset>): Promise<Asset> {
-  return mapActivoToAsset(await httpClient.patch<ActivoAPI>(`/api/activos/${id}`, data));
+  return mapActivoToAsset(await httpClient.patch<ActivoAPI>(`/api/activos/${id}`, mapAssetToDto(data)));
 }
 
 export async function deleteAsset(id: string): Promise<void> {
@@ -172,7 +217,7 @@ export async function deleteAsset(id: string): Promise<void> {
 
 export async function transferirActivo(
   id: string,
-  data: { areaId: string; bahiaId: string; rackId: string; cajaId?: string; motivo: string }
+  data: { areaId: string; bahiaId?: string; rackId?: string; cajaId?: string; motivo: string }
 ): Promise<Asset> {
   try {
     return mapActivoToAsset(await httpClient.post<ActivoAPI>(`/api/activos/${id}/transferir`, data));

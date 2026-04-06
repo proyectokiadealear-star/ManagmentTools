@@ -50,13 +50,16 @@ export class AssetsService {
   }
 
   async create(createActivoDto: CreateActivoDto, usuarioId: string): Promise<Activo> {
-    const ocupada = await this.validarUbicacionOcupada(
-      createActivoDto.areaId,
-      createActivoDto.bahiaId,
-      createActivoDto.rackId,
-    );
-    if (ocupada) {
-      throw new ConflictException('Ubicación ya ocupada por otro equipo');
+    // Solo validar ubicación ocupada si se proporcionaron los 3 niveles
+    if (createActivoDto.areaId && createActivoDto.bahiaId && createActivoDto.rackId) {
+      const ocupada = await this.validarUbicacionOcupada(
+        createActivoDto.areaId,
+        createActivoDto.bahiaId,
+        createActivoDto.rackId,
+      );
+      if (ocupada) {
+        throw new ConflictException('Ubicación ya ocupada por otro equipo');
+      }
     }
 
     const now = new Date().toISOString();

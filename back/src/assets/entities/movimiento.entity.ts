@@ -1,9 +1,9 @@
 export interface Ubicacion {
   areaId: string;
   areaNombre?: string;
-  bahiaId: string;
+  bahiaId?: string;
   bahiaNombre?: string;
-  rackId: string;
+  rackId?: string;
   rackNombre?: string;
   cajaId?: string;
   cajaNumero?: string;

@@ -19,8 +19,8 @@ export interface Activo {
   periodicidad?: string;         // Maintenance periodicity (e.g. "Anual")
   itemProveedor?: string;        // Supplier item code
   areaId: string;
-  bahiaId: string;
-  rackId: string;
+  bahiaId?: string;
+  rackId?: string;
   cajaId?: string;
   responsable?: string;          // Responsible role (e.g. "Jefe de Taller")
   custodio?: string;             // Custodian person name

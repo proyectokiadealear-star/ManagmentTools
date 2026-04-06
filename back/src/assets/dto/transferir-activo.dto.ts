@@ -4,11 +4,13 @@ export class TransferirActivoDto {
   @IsString()
   areaId: string;
 
+  @IsOptional()
   @IsString()
-  bahiaId: string;
+  bahiaId?: string;
 
+  @IsOptional()
   @IsString()
-  rackId: string;
+  rackId?: string;
 
   @IsOptional()
   @IsString()

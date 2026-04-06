@@ -12,11 +12,11 @@ import {
 } from 'lucide-react';
 import {
   PeriodoResponsabilidad,
-  PersonalTaller,
   PERMISO_LABELS,
   PermisoResponsabilidad,
 } from '../../data/mockData';
-import { getActivos, getPersonal, cerrarPeriodo } from '../../services/responsabilidadService';
+import { getActivos, cerrarPeriodo } from '../../services/responsabilidadService';
+import { getUsuarios, Usuario } from '../../services/usuariosService';
 import { AsignarResponsableModal } from './AsignarResponsableModal';
 import { HistorialResponsabilidadModal } from './HistorialResponsabilidadModal';
 import { ConfirmModal } from '@shared/components';
@@ -31,7 +31,7 @@ const AREAS_DEFINIDAS = ['Taller', 'Bodega', 'EV / Híbridos', 'Recepción'];
 
 export function ResponsabilidadesView() {
   const [periodos, setPeriodos] = useState<PeriodoResponsabilidad[]>([]);
-  const [personal, setPersonal] = useState<PersonalTaller[]>([]);
+  const [personal, setPersonal] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
   const [showAsignar, setShowAsignar] = useState(false);
@@ -41,10 +41,10 @@ export function ResponsabilidadesView() {
   const [periodoACerrar, setPeriodoACerrar] = useState<PeriodoResponsabilidad | null>(null);
 
   useEffect(() => {
-    Promise.all([getActivos(), getPersonal()])
-      .then(([p, per]) => {
+    Promise.all([getActivos(), getUsuarios()])
+      .then(([p, users]) => {
         setPeriodos(p);
-        setPersonal(per);
+        setPersonal(users.filter(u => u.activo));
       })
       .finally(() => setLoading(false));
   }, []);
