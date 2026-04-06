@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  HttpCode,
   Query,
   UploadedFile,
   UseInterceptors,
@@ -112,9 +113,10 @@ export class AssetsController {
   }
 
   @Delete(':id')
+  @HttpCode(204)
   @ApiOperation({ summary: 'Eliminar un activo del inventario' })
   @ApiParam({ name: 'id', description: 'ID del activo', example: 'A001' })
-  @ApiResponse({ status: 200, description: 'Activo eliminado' })
+  @ApiResponse({ status: 204, description: 'Activo eliminado' })
   @ApiResponse({ status: 404, description: 'Activo no encontrado' })
   remove(@Param('id') id: string) {
     return this.assetsService.remove(id);

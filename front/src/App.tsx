@@ -20,6 +20,7 @@ import { MaterialConsumption } from '@features/consumables-safety/MaterialConsum
 import { PPEManagement } from '@features/consumables-safety/PPEManagement';
 import { ResponsabilidadesView } from '@features/responsabilidades/ResponsabilidadesView';
 import { UsuariosView } from '@features/usuarios/UsuariosView';
+import { CatalogosView } from '@features/catalogos/CatalogosView';
 
 /** Shows a full-screen spinner while Firebase resolves the auth state */
 function AuthLoader() {
@@ -73,6 +74,7 @@ function MainLayout() {
           <Route path="/ppe-management" element={<PPEManagement />} />
           <Route path="/responsabilidades" element={<ResponsabilidadesView />} />
           <Route path="/usuarios" element={<UsuariosView />} />
+          <Route path="/catalogos" element={<CatalogosView />} />
           <Route path="/depreciation" element={<Depreciation />} />
           <Route path="/maintenance" element={<MaintenancePlanning />} />
           <Route path="/repair-vs-replace" element={<RepairVsReplace />} />

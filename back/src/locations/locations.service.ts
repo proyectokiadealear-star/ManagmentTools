@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
 import { Firestore } from 'firebase-admin/firestore';
 import { FirebaseService } from '../firebase/firebase.service';
@@ -10,14 +10,10 @@ import { AreaTaller, AREA_LABELS } from '../common/enums/area-taller.enum';
 import { Sede } from '../common/enums/sede.enum';
 
 @Injectable()
-export class LocationsService implements OnModuleInit {
+export class LocationsService {
   private readonly logger = new Logger(LocationsService.name);
 
   constructor(private readonly firebaseService: FirebaseService) {}
-
-  async onModuleInit() {
-    await this.seedInitialData();
-  }
 
   private get firestore(): Firestore {
     return this.firebaseService.getFirestore();
@@ -40,13 +36,51 @@ export class LocationsService implements OnModuleInit {
     return { id: docRef.id, ...data, createdAt: now, updatedAt: now };
   }
 
+  async updateArea(id: string, data: Partial<Area>): Promise<Area> {
+    const docRef = this.firestore.collection('areas').doc(id);
+    const doc = await docRef.get();
+    if (!doc.exists) throw new NotFoundException(`Área ${id} no encontrada`);
+    const updates = { ...data, updatedAt: new Date().toISOString() };
+    await docRef.update(updates);
+    return { id: doc.id, ...doc.data(), ...updates } as Area;
+  }
+
+  async removeArea(id: string): Promise<void> {
+    const docRef = this.firestore.collection('areas').doc(id);
+    const doc = await docRef.get();
+    if (!doc.exists) throw new NotFoundException(`Área ${id} no encontrada`);
+    await docRef.delete();
+  }
+
   async findBahiasByArea(areaId: string): Promise<Bahia[]> {
     const snapshot = await this.firestore
       .collection('bahias')
       .where('areaId', '==', areaId)
-      .orderBy('numero')
       .get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Bahia));
+    const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Bahia));
+    return items.sort((a, b) => (a.numero ?? 0) - (b.numero ?? 0));
+  }
+
+  async createBahia(data: Omit<Bahia, 'id'>): Promise<Bahia> {
+    const now = new Date().toISOString();
+    const docRef = await this.firestore.collection('bahias').add({ ...data, createdAt: now, updatedAt: now });
+    return { id: docRef.id, ...data, createdAt: now, updatedAt: now };
+  }
+
+  async updateBahia(id: string, data: Partial<Bahia>): Promise<Bahia> {
+    const docRef = this.firestore.collection('bahias').doc(id);
+    const doc = await docRef.get();
+    if (!doc.exists) throw new NotFoundException(`Bahía ${id} no encontrada`);
+    const updates = { ...data, updatedAt: new Date().toISOString() };
+    await docRef.update(updates);
+    return { id: doc.id, ...doc.data(), ...updates } as Bahia;
+  }
+
+  async removeBahia(id: string): Promise<void> {
+    const docRef = this.firestore.collection('bahias').doc(id);
+    const doc = await docRef.get();
+    if (!doc.exists) throw new NotFoundException(`Bahía ${id} no encontrada`);
+    await docRef.delete();
   }
 
   async findRacksByBahia(bahiaId: string): Promise<Rack[]> {
@@ -57,12 +91,56 @@ export class LocationsService implements OnModuleInit {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Rack));
   }
 
+  async createRack(data: Omit<Rack, 'id'>): Promise<Rack> {
+    const now = new Date().toISOString();
+    const docRef = await this.firestore.collection('racks').add({ ...data, createdAt: now, updatedAt: now });
+    return { id: docRef.id, ...data, createdAt: now, updatedAt: now };
+  }
+
+  async updateRack(id: string, data: Partial<Rack>): Promise<Rack> {
+    const docRef = this.firestore.collection('racks').doc(id);
+    const doc = await docRef.get();
+    if (!doc.exists) throw new NotFoundException(`Rack ${id} no encontrado`);
+    const updates = { ...data, updatedAt: new Date().toISOString() };
+    await docRef.update(updates);
+    return { id: doc.id, ...doc.data(), ...updates } as Rack;
+  }
+
+  async removeRack(id: string): Promise<void> {
+    const docRef = this.firestore.collection('racks').doc(id);
+    const doc = await docRef.get();
+    if (!doc.exists) throw new NotFoundException(`Rack ${id} no encontrado`);
+    await docRef.delete();
+  }
+
   async findCajasByRack(rackId: string): Promise<Caja[]> {
     const snapshot = await this.firestore
       .collection('cajas')
       .where('rackId', '==', rackId)
       .get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Caja));
+  }
+
+  async createCaja(data: Omit<Caja, 'id'>): Promise<Caja> {
+    const now = new Date().toISOString();
+    const docRef = await this.firestore.collection('cajas').add({ ...data, createdAt: now, updatedAt: now });
+    return { id: docRef.id, ...data, createdAt: now, updatedAt: now };
+  }
+
+  async updateCaja(id: string, data: Partial<Caja>): Promise<Caja> {
+    const docRef = this.firestore.collection('cajas').doc(id);
+    const doc = await docRef.get();
+    if (!doc.exists) throw new NotFoundException(`Caja ${id} no encontrada`);
+    const updates = { ...data, updatedAt: new Date().toISOString() };
+    await docRef.update(updates);
+    return { id: doc.id, ...doc.data(), ...updates } as Caja;
+  }
+
+  async removeCaja(id: string): Promise<void> {
+    const docRef = this.firestore.collection('cajas').doc(id);
+    const doc = await docRef.get();
+    if (!doc.exists) throw new NotFoundException(`Caja ${id} no encontrada`);
+    await docRef.delete();
   }
 
   async seedInitialData(): Promise<void> {

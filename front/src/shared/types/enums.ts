@@ -10,7 +10,7 @@ export enum AreaTaller {
   BODEGA     = 'BODEGA',
 }
 
-export const AREA_LABELS: Record<AreaTaller, string> = {
+export const AREA_LABELS: Record<string, string> = {
   [AreaTaller.TALLER]:     'Taller Mecánica',
   [AreaTaller.ENDEREZADO]: 'Enderezado',
   [AreaTaller.PINTURA]:    'Pintura',

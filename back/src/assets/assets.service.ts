@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
 import { Firestore } from 'firebase-admin/firestore';
 import { FirebaseService } from '../firebase/firebase.service';
 import { Activo } from './entities/activo.entity';
@@ -27,14 +27,10 @@ export interface DisponibilidadActivo {
 }
 
 @Injectable()
-export class AssetsService implements OnModuleInit {
+export class AssetsService {
   private readonly logger = new Logger(AssetsService.name);
 
   constructor(private readonly firebaseService: FirebaseService) {}
-
-  async onModuleInit() {
-    await this.seedData();
-  }
 
   private get firestore(): Firestore {
     return this.firebaseService.getFirestore();

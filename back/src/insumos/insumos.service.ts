@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { Firestore } from 'firebase-admin/firestore';
 import { FirebaseService } from '../firebase/firebase.service';
 import { CatalogoInsumo, ConsumoInsumo, AnalisisAnomalia, NivelAnomalia } from './entities/insumo.entity';
@@ -8,14 +8,10 @@ import { CreateCatalogoInsumoDto, UpdateCatalogoInsumoDto, RegistrarConsumoDto }
 const TOLERANCIA_DESVIACION = 0.2;
 
 @Injectable()
-export class InsumosService implements OnModuleInit {
+export class InsumosService {
   private readonly logger = new Logger(InsumosService.name);
 
   constructor(private readonly firebaseService: FirebaseService) {}
-
-  async onModuleInit() {
-    await this.seedData();
-  }
 
   private get firestore(): Firestore {
     return this.firebaseService.getFirestore();

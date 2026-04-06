@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { Firestore } from 'firebase-admin/firestore';
 import { FirebaseService } from '../firebase/firebase.service';
 import { Inspeccion, FotoInspeccion, Discrepancia } from './entities/inspeccion.entity';
@@ -11,15 +11,11 @@ import {
 } from './dto/inspeccion.dto';
 
 @Injectable()
-export class InspeccionesService implements OnModuleInit {
+export class InspeccionesService {
   private readonly logger = new Logger(InspeccionesService.name);
   private readonly COLLECTION = 'inspecciones';
 
   constructor(private readonly firebaseService: FirebaseService) {}
-
-  async onModuleInit() {
-    await this.seedData();
-  }
 
   private get firestore(): Firestore {
     return this.firebaseService.getFirestore();

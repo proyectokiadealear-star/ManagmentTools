@@ -1,4 +1,3 @@
-import { AreaTaller } from '../shared/types/enums';
 
 export interface CustodyTransfer {
   id: string;
@@ -13,7 +12,7 @@ export interface Asset {
   id: string;
   codigo: string;
   descripcion: string;
-  tipo: 'Tablet' | 'Herramienta' | 'Conector' | 'Equipo';
+  tipo: string;
   marca: string;
   modelo: string;
   serial: string;
@@ -23,7 +22,7 @@ export interface Asset {
   fechaCompra: string;
   valor: number;
   ubicacion: string;
-  area?: AreaTaller;
+  area?: string;
   bahia?: string;
   rack?: string;
   caja?: string;

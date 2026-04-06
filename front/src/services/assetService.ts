@@ -1,7 +1,6 @@
 // assetService.ts — API REST
 import { Asset } from '../data/mockData';
 import { environment } from '../environments/environment';
-import { AreaTaller, Sede } from '../shared/types/enums';
 import { httpClient } from './httpClient';
 import { auth } from '../config/firebase';
 
@@ -100,19 +99,12 @@ export interface MovimientoAPI {
  *
  * Key differences:
  *  - backend `nombre`  → frontend `descripcion`
- *  - backend `areaId`  → frontend `area` (AreaTaller enum key, or undefined)
+ *  - backend `areaId`  → frontend `area` (string ID)
  *  - backend `bahiaId` → frontend `bahia`
  *  - backend `rackId`  → frontend `rack`
  *  - backend `cajaId`  → frontend `caja`
  */
 export function mapActivoToAsset(a: ActivoAPI): Asset {
-  // Try to resolve areaId → AreaTaller enum.
-  // If areaId already IS an enum key (e.g. "TALLER") use it directly.
-  // Otherwise leave undefined so the "texto libre" branch renders.
-  const areaEnum = Object.values(AreaTaller).includes(a.areaId as AreaTaller)
-    ? (a.areaId as AreaTaller)
-    : undefined;
-
   // Map estadoOperativo → frontend estado label
   const estadoMap: Record<string, 'Activo' | 'En Reparación' | 'Dado de Baja'> = {
     disponible:        'Activo',
@@ -136,7 +128,7 @@ export function mapActivoToAsset(a: ActivoAPI): Asset {
     fechaCompra:             a.fechaCompra ?? '',
     valor:                   a.valor ?? a.valorActual ?? 0,
     ubicacion:               a.areaId ?? '',
-    area:                    areaEnum,
+    area:                    a.areaId ?? undefined,
     bahia:                   a.bahiaId ?? undefined,
     rack:                    a.rackId ?? undefined,
     caja:                    a.cajaId ?? undefined,
@@ -245,11 +237,10 @@ export async function uploadActivoImagen(activoId: string, file: File): Promise<
 
 export interface AreaAPI {
   id: string;
-  /** Clave de enum — usar para lógica de negocio */
-  tipo: AreaTaller;
   /** Nombre para mostrar (ej: "Taller Mecánica") */
   nombre: string;
-  sede: Sede;
+  tipo?: string;
+  sede?: string;
   descripcion?: string;
   capacidad?: number;
   estado?: string;
@@ -262,14 +253,62 @@ export async function getAreas(): Promise<AreaAPI[]> {
   return httpClient.get<AreaAPI[]>('/api/areas');
 }
 
+export async function createArea(data: Partial<AreaAPI>): Promise<AreaAPI> {
+  return httpClient.post<AreaAPI>('/api/areas', data);
+}
+
+export async function updateArea(id: string, data: Partial<AreaAPI>): Promise<AreaAPI> {
+  return httpClient.patch<AreaAPI>(`/api/areas/${id}`, data);
+}
+
+export async function deleteArea(id: string): Promise<void> {
+  await httpClient.delete(`/api/areas/${id}`);
+}
+
 export async function getBahias(areaId: string): Promise<BahiaAPI[]> {
   return httpClient.get<BahiaAPI[]>(`/api/areas/${areaId}/bahias`);
+}
+
+export async function createBahia(data: Partial<BahiaAPI>): Promise<BahiaAPI> {
+  return httpClient.post<BahiaAPI>('/api/bahias', data);
+}
+
+export async function updateBahia(id: string, data: Partial<BahiaAPI>): Promise<BahiaAPI> {
+  return httpClient.patch<BahiaAPI>(`/api/bahias/${id}`, data);
+}
+
+export async function deleteBahia(id: string): Promise<void> {
+  await httpClient.delete(`/api/bahias/${id}`);
 }
 
 export async function getRacks(bahiaId: string): Promise<RackAPI[]> {
   return httpClient.get<RackAPI[]>(`/api/bahias/${bahiaId}/racks`);
 }
 
+export async function createRack(data: Partial<RackAPI>): Promise<RackAPI> {
+  return httpClient.post<RackAPI>('/api/racks', data);
+}
+
+export async function updateRack(id: string, data: Partial<RackAPI>): Promise<RackAPI> {
+  return httpClient.patch<RackAPI>(`/api/racks/${id}`, data);
+}
+
+export async function deleteRack(id: string): Promise<void> {
+  await httpClient.delete(`/api/racks/${id}`);
+}
+
 export async function getCajas(rackId: string): Promise<CajaAPI[]> {
   return httpClient.get<CajaAPI[]>(`/api/racks/${rackId}/cajas`);
+}
+
+export async function createCaja(data: Partial<CajaAPI>): Promise<CajaAPI> {
+  return httpClient.post<CajaAPI>('/api/cajas', data);
+}
+
+export async function updateCaja(id: string, data: Partial<CajaAPI>): Promise<CajaAPI> {
+  return httpClient.patch<CajaAPI>(`/api/cajas/${id}`, data);
+}
+
+export async function deleteCaja(id: string): Promise<void> {
+  await httpClient.delete(`/api/cajas/${id}`);
 }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { FirebaseService } from '../firebase/firebase.service';
 import {
   PeriodoResponsabilidad,
@@ -22,15 +22,10 @@ export interface ResultadoDuplicado {
 export type ResultadoPeriodo = ResultadoCreacion | ResultadoDuplicado;
 
 @Injectable()
-export class ResponsabilidadesService implements OnModuleInit {
+export class ResponsabilidadesService {
   private readonly logger = new Logger(ResponsabilidadesService.name);
 
   constructor(private readonly firebaseService: FirebaseService) {}
-
-  async onModuleInit() {
-    const result = await this.seedData();
-    this.logger.log(result.mensaje);
-  }
 
   private get firestore() {
     return this.firebaseService.getFirestore();

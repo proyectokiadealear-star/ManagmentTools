@@ -50,10 +50,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     throw new Error(message);
   }
 
-  // 204 No Content — no parsear body
+  // 204 No Content o body vacío — no parsear
   if (res.status === 204) return undefined as unknown as T;
 
-  return res.json();
+  const text = await res.text();
+  if (!text) return undefined as unknown as T;
+  return JSON.parse(text);
 }
 
 export const httpClient = {

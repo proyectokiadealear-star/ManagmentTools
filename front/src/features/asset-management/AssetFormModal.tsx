@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Save, ImagePlus, Trash2, Upload, Loader2 } from 'lucide-react';
 import { Asset } from '../../data/mockData';
-import { AREAS_OPTIONS } from '../../shared/types/enums';
-import { uploadActivoImagen } from '../../services/assetService';
+import { uploadActivoImagen, getAreas, getBahias, getRacks, getCajas, AreaAPI, BahiaAPI, RackAPI, CajaAPI } from '../../services/assetService';
+import { getCatalogos, CatalogoItem } from '../../services/catalogoService';
 interface AssetFormModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -50,6 +50,58 @@ export function AssetFormModal({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Catálogos dinámicos ──
+  const [tiposActivo, setTiposActivo] = useState<CatalogoItem[]>([]);
+  const [marcas, setMarcas] = useState<CatalogoItem[]>([]);
+  const [modelos, setModelos] = useState<CatalogoItem[]>([]);
+  const [proveedores, setProveedores] = useState<CatalogoItem[]>([]);
+
+  // ── Ubicación dinámica ──
+  const [areas, setAreas] = useState<AreaAPI[]>([]);
+  const [bahias, setBahias] = useState<BahiaAPI[]>([]);
+  const [racks, setRacks] = useState<RackAPI[]>([]);
+  const [cajas, setCajas] = useState<CajaAPI[]>([]);
+
+  // Cargar catálogos al montar
+  useEffect(() => {
+    getCatalogos('tipo-activo').then(setTiposActivo).catch(() => {});
+    getCatalogos('marca').then(setMarcas).catch(() => {});
+    getCatalogos('proveedor').then(setProveedores).catch(() => {});
+    getAreas().then(setAreas).catch(() => {});
+  }, []);
+
+  // Cargar modelos cuando cambia la marca seleccionada
+  useEffect(() => {
+    if (!formData.marca) { setModelos([]); return; }
+    const marcaItem = marcas.find(m => m.nombre === formData.marca);
+    if (marcaItem) {
+      getCatalogos('modelo', marcaItem.id).then(setModelos).catch(() => {});
+    } else {
+      setModelos([]);
+    }
+  }, [formData.marca, marcas]);
+
+  // Cargar bahías cuando cambia el área
+  useEffect(() => {
+    if (!formData.area) { setBahias([]); setRacks([]); setCajas([]); return; }
+    getBahias(formData.area).then(setBahias).catch(() => {});
+    setFormData(prev => ({ ...prev, bahia: '', rack: '', caja: '' }));
+  }, [formData.area]);
+
+  // Cargar racks cuando cambia la bahía
+  useEffect(() => {
+    if (!formData.bahia) { setRacks([]); setCajas([]); return; }
+    getRacks(formData.bahia).then(setRacks).catch(() => {});
+    setFormData(prev => ({ ...prev, rack: '', caja: '' }));
+  }, [formData.bahia]);
+
+  // Cargar cajas cuando cambia el rack
+  useEffect(() => {
+    if (!formData.rack) { setCajas([]); return; }
+    getCajas(formData.rack).then(setCajas).catch(() => {});
+    setFormData(prev => ({ ...prev, caja: '' }));
+  }, [formData.rack]);
   useEffect(() => {
     if (isOpen) {
       setImgError(false);
@@ -284,36 +336,44 @@ export function AssetFormModal({
                       value={formData.tipo}
                       onChange={handleChange}
                       className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500">
-                      
-                      <option value="Equipo">Equipo</option>
-                      <option value="Herramienta">Herramienta</option>
-                      <option value="Tablet">Tablet</option>
-                      <option value="Conector">Conector</option>
+                      <option value="">-- Seleccionar tipo --</option>
+                      {tiposActivo.filter(t => t.activo).map(t => (
+                        <option key={t.id} value={t.nombre}>{t.nombre}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">
                       Marca
                     </label>
-                    <input
-                      type="text"
+                    <select
                       name="marca"
                       value={formData.marca}
                       onChange={handleChange}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500" />
-                    
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500">
+                      <option value="">-- Seleccionar marca --</option>
+                      {marcas.filter(m => m.activo).map(m => (
+                        <option key={m.id} value={m.nombre}>{m.nombre}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">
                       Modelo
                     </label>
-                    <input
-                      type="text"
+                    <select
                       name="modelo"
                       value={formData.modelo}
                       onChange={handleChange}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500" />
-                    
+                      disabled={!formData.marca}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500 disabled:bg-slate-50 disabled:text-slate-400">
+                      <option value="">
+                        {formData.marca ? '-- Seleccionar modelo --' : '-- Seleccione una marca primero --'}
+                      </option>
+                      {modelos.filter(m => m.activo).map(m => (
+                        <option key={m.id} value={m.nombre}>{m.nombre}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">
@@ -373,8 +433,8 @@ export function AssetFormModal({
                       onChange={handleChange}
                       className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500">
                       <option value="">— Seleccionar área —</option>
-                      {AREAS_OPTIONS.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      {areas.map(a => (
+                        <option key={a.id} value={a.id}>{a.nombre}</option>
                       ))}
                     </select>
                   </div>
@@ -384,21 +444,15 @@ export function AssetFormModal({
                     </label>
                     <select
                       name="bahia"
-                      value={formData.bahia}
+                      value={formData.bahia ?? ''}
                       onChange={handleChange}
                       disabled={!formData.area}
                       className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500 disabled:bg-slate-50 disabled:text-slate-400">
                       <option value="">
                         {formData.area ? '— Seleccionar bahía —' : '— Seleccione un área primero —'}
                       </option>
-                      {(({
-                        'Taller': ['Diagnóstico', 'Alineación y Balanceo', 'Mecánica General', 'Eléctrica', 'Lavado'],
-                        'Recepción': ['Atención al Cliente', 'Entrega de Vehículos'],
-                        'Bodega': ['Herramientas Especiales', 'Repuestos', 'Vehículos Eléctricos', 'General'],
-                        'Administración': ['Oficina Jefe', 'Sala de Reuniones'],
-                        'EV / Híbridos': ['Bahía EV-1', 'Bahía EV-2', 'Almacén EV'],
-                      } as Record<string, string[]>)[formData.area ?? ''] ?? []).map((opt) => (
-                        <option key={opt} value={opt}>{opt}</option>
+                      {bahias.map(b => (
+                        <option key={b.id} value={b.id}>{b.nombre}</option>
                       ))}
                     </select>
                   </div>
@@ -406,25 +460,37 @@ export function AssetFormModal({
                     <label className="block text-xs font-medium text-slate-700 mb-1">
                       Rack / Estante
                     </label>
-                    <input
-                      type="text"
+                    <select
                       name="rack"
                       value={formData.rack ?? ''}
                       onChange={handleChange}
-                      placeholder="ej. Estante B, Nivel 2"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500" />
+                      disabled={!formData.bahia}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500 disabled:bg-slate-50 disabled:text-slate-400">
+                      <option value="">
+                        {formData.bahia ? '— Seleccionar rack —' : '— Seleccione una bahía primero —'}
+                      </option>
+                      {racks.map(r => (
+                        <option key={r.id} value={r.id}>{r.nombre}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">
                       Caja / Posición
                     </label>
-                    <input
-                      type="text"
+                    <select
                       name="caja"
                       value={formData.caja ?? ''}
                       onChange={handleChange}
-                      placeholder="ej. Mesa de Trabajo - C. Mendoza"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500" />
+                      disabled={!formData.rack}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500 disabled:bg-slate-50 disabled:text-slate-400">
+                      <option value="">
+                        {formData.rack ? '— Seleccionar caja —' : '— Seleccione un rack primero —'}
+                      </option>
+                      {cajas.map(c => (
+                        <option key={c.id} value={c.id}>{c.numero}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
                 <div className="mt-3 px-3 py-2 bg-blue-50 border border-blue-100 rounded-md text-xs text-blue-600">
@@ -504,13 +570,16 @@ export function AssetFormModal({
                     <label className="block text-xs font-medium text-slate-700 mb-1">
                       Proveedor
                     </label>
-                    <input
-                      type="text"
+                    <select
                       name="proveedor"
                       value={formData.proveedor}
                       onChange={handleChange}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500" />
-                    
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500">
+                      <option value="">-- Seleccionar proveedor --</option>
+                      {proveedores.filter(p => p.activo).map(p => (
+                        <option key={p.id} value={p.nombre}>{p.nombre}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">
@@ -529,11 +598,10 @@ export function AssetFormModal({
                       Fecha Compra
                     </label>
                     <input
-                      type="text"
+                      type="date"
                       name="fechaCompra"
                       value={formData.fechaCompra}
                       onChange={handleChange}
-                      placeholder="ej. 28-oct-22"
                       className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500" />
                     
                   </div>

@@ -128,6 +128,7 @@ const navigation: NavEntry[] = [
     roles: ['jefe'],
     items: [
       { path: '/usuarios', label: 'Usuarios', icon: Users, roles: ['jefe'] },
+      { path: '/catalogos', label: 'Catálogos', icon: Settings, roles: ['jefe', 'tecnico'] },
     ],
   },
 ];

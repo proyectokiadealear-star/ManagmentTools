@@ -16,6 +16,7 @@ import { PrestamosModule } from './prestamos/prestamos.module';
 import { InsumosModule } from './insumos/insumos.module';
 import { EppModule } from './epp/epp.module';
 import { InspeccionesModule } from './inspecciones/inspecciones.module';
+import { CatalogosModule } from './catalogos/catalogos.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -29,6 +30,7 @@ import { AppService } from './app.service';
     FirebaseModule,
     AssetsModule,
     LocationsModule,
+    CatalogosModule,
     ResponsabilidadesModule,
     UsuariosModule,
     AuthModule,

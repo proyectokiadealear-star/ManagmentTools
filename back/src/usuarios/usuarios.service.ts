@@ -3,7 +3,6 @@ import {
   NotFoundException,
   ConflictException,
   InternalServerErrorException,
-  OnModuleInit,
   Logger,
 } from '@nestjs/common';
 import { FirebaseService } from '../firebase/firebase.service';
@@ -14,15 +13,10 @@ import { Sede } from '../common/enums/sede.enum';
 import { AreaTaller } from '../common/enums/area-taller.enum';
 
 @Injectable()
-export class UsuariosService implements OnModuleInit {
+export class UsuariosService {
   private readonly logger = new Logger(UsuariosService.name);
 
   constructor(private readonly firebaseService: FirebaseService) {}
-
-  async onModuleInit() {
-    const result = await this.seedData(false);
-    this.logger.log(result.mensaje);
-  }
 
   private get firestore() {
     return this.firebaseService.getFirestore();

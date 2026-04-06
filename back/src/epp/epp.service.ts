@@ -1,18 +1,14 @@
-import { Injectable, NotFoundException, BadRequestException, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { Firestore } from 'firebase-admin/firestore';
 import { FirebaseService } from '../firebase/firebase.service';
 import { CatalogoEPP, EntregaEPP, ComparativaEPP } from './entities/epp.entity';
 import { CreateCatalogoEPPDto, UpdateCatalogoEPPDto, RegistrarEntregaDto } from './dto/epp.dto';
 
 @Injectable()
-export class EppService implements OnModuleInit {
+export class EppService {
   private readonly logger = new Logger(EppService.name);
 
   constructor(private readonly firebaseService: FirebaseService) {}
-
-  async onModuleInit() {
-    await this.seedData();
-  }
 
   private get firestore(): Firestore {
     return this.firebaseService.getFirestore();
