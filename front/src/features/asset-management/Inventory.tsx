@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, Eye, MapPin, Plus, Edit, Trash2, LayoutList, LayoutGrid, Wrench, CheckCircle, XCircle } from 'lucide-react';
+import { Search, Filter, Eye, MapPin, Plus, Edit, Trash2, LayoutList, LayoutGrid, Wrench, CheckCircle, XCircle, FileDown } from 'lucide-react';
 import { Asset } from '../../data/mockData';
 import { AssetDetailModal } from './AssetDetailModal';
 import { AssetFormModal } from './AssetFormModal';
 import { useAssets, useAssetContext } from '@shared/context/AssetContext';
 import { AREA_LABELS } from '@shared/types/enums';
 import { ConfirmModal } from '@shared/components';
+import { generateFichaTecnicaPdf } from '@shared/utils/fichaTecnicaPdf';
 
 function SkeletonRow() {
   return (
@@ -287,6 +288,12 @@ export function Inventory() {
                         <Eye size={18} />
                       </button>
                       <button
+                      onClick={() => generateFichaTecnicaPdf(asset)}
+                      className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                      title="Descargar Ficha Técnica PDF">
+                        <FileDown size={18} />
+                      </button>
+                      <button
                       onClick={() => handleEditAsset(asset)}
                       className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
                       title="Editar">
@@ -383,6 +390,12 @@ export function Inventory() {
                       className="flex-1 flex items-center justify-center p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
                       title="Ver Ficha">
                       <Eye size={16} />
+                    </button>
+                    <button
+                      onClick={() => generateFichaTecnicaPdf(asset)}
+                      className="flex-1 flex items-center justify-center p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                      title="Descargar Ficha Técnica PDF">
+                      <FileDown size={16} />
                     </button>
                     <button
                       onClick={() => handleEditAsset(asset)}

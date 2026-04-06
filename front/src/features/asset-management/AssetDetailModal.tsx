@@ -7,6 +7,7 @@ import {
   Tag,
   AlertCircle,
   FileText,
+  FileDown,
   Wrench,
   Send,
   History,
@@ -16,6 +17,7 @@ import { Asset } from '../../data/mockData';
 import { calcDepreciation } from '@shared/utils/depreciation';
 import { AREA_LABELS } from '@shared/types/enums';
 import { ConfirmModal } from '@shared/components';
+import { generateFichaTecnicaPdf } from '@shared/utils/fichaTecnicaPdf';
 
 interface AssetDetailModalProps {
   asset: Asset | null;
@@ -36,6 +38,19 @@ export function AssetDetailModal({
 }: AssetDetailModalProps) {
   // Hooks must be called unconditionally — guard is done inside JSX below
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  const handleDownloadFicha = async () => {
+    if (!asset || generatingPdf) return;
+    setGeneratingPdf(true);
+    try {
+      await generateFichaTecnicaPdf(asset);
+    } catch (err) {
+      console.error('Error generando ficha técnica:', err);
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
 
   // Compute depreciation only when we have a valid asset
   const dep = asset
@@ -342,6 +357,14 @@ export function AssetDetailModal({
                       Solicitar Préstamo
                     </button>
                   )}
+                  <button
+                    onClick={handleDownloadFicha}
+                    disabled={generatingPdf}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                  >
+                    <FileDown size={14} />
+                    {generatingPdf ? 'Generando...' : 'Ficha Técnica PDF'}
+                  </button>
                   <button
                     className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
                     onClick={() => alert('Historial de movimientos — próximamente')}
