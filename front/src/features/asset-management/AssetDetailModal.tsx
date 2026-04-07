@@ -21,6 +21,7 @@ import { FichaTecnicaPreviewModal } from './FichaTecnicaPreviewModal';
 import { HistorialMovimientosModal } from './HistorialMovimientosModal';
 import { ReportarFallaModal } from './ReportarFallaModal';
 import { getAreas, AreaAPI } from '../../services/assetService';
+import { useLocationNames } from '@shared/hooks/useLocationNames';
 
 interface AssetDetailModalProps {
   asset: Asset | null;
@@ -40,6 +41,7 @@ export function AssetDetailModal({
   onSolicitarPrestamo,
 }: AssetDetailModalProps) {
   // Hooks must be called unconditionally — guard is done inside JSX below
+  const resolveLocation = useLocationNames();
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [showHistorial, setShowHistorial] = useState(false);
@@ -52,8 +54,10 @@ export function AssetDetailModal({
 
   const getAreaNombre = (areaId: string | undefined) => {
     if (!areaId) return 'No definida';
+    const fromCache = resolveLocation(areaId);
+    if (fromCache) return fromCache;
     const found = areas.find(a => a.id === areaId);
-    return found ? found.nombre : areaId;
+    return found ? found.nombre : 'No definida';
   };
 
   // Calcular próximo mantenimiento a partir del último + periodicidad
@@ -219,19 +223,19 @@ export function AssetDetailModal({
                           <div>
                             <p className="text-xs text-slate-500 mb-1">Bahía</p>
                             <p className="text-sm font-medium text-slate-900">
-                              {asset.bahia || 'No definida'}
+                              {resolveLocation(asset.bahia) || 'No definida'}
                             </p>
                           </div>
                           <div>
                             <p className="text-xs text-slate-500 mb-1">Rack / Estante</p>
                             <p className="text-sm font-medium text-slate-900">
-                              {asset.rack || 'No definido'}
+                              {resolveLocation(asset.rack) || 'No definido'}
                             </p>
                           </div>
                           <div>
                             <p className="text-xs text-slate-500 mb-1">Caja / Posición</p>
                             <p className="text-sm font-medium text-slate-900">
-                              {asset.caja || 'No definida'}
+                              {resolveLocation(asset.caja) || 'No definida'}
                             </p>
                           </div>
                         </div>

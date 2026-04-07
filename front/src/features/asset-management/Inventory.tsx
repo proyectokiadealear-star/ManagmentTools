@@ -43,12 +43,14 @@ export function Inventory() {
   const [areaMap, setAreaMap] = useState<Record<string, string>>({});
   const [bahiaMap, setBahiaMap] = useState<Record<string, string>>({});
   const [rackMap, setRackMap] = useState<Record<string, string>>({});
+  const [cajaMap, setCajaMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    getLocationTree().then(({ areas, bahias, racks }) => {
+    getLocationTree().then(({ areas, bahias, racks, cajas }) => {
       setAreaMap(Object.fromEntries(areas.map(a => [a.id, a.nombre])));
       setBahiaMap(Object.fromEntries(bahias.map(b => [b.id, b.nombre])));
       setRackMap(Object.fromEntries(racks.map(r => [r.id, r.nombre])));
+      setCajaMap(Object.fromEntries((cajas ?? []).map(c => [c.id, c.numero])));
     }).catch(() => {/* keep maps empty on error */});
   }, []);
 
@@ -268,7 +270,7 @@ export function Inventory() {
                       {asset.caja && (
                         <div className="pl-5">
                           <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded">
-                            Caja: {asset.caja}
+                            Caja: {cajaMap[asset.caja] ?? asset.caja}
                           </span>
                         </div>
                       )}

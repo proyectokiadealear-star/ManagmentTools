@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, Clock, Wrench, AlertTriangle, X, Loader2, Send } from 'lucide-react';
 import { Asset } from '../../data/mockData';
 import { getDisponibilidad, DisponibilidadResponse } from '../../services/assetService';
-import { AREA_LABELS } from '@shared/types/enums';
+import { useLocationNames } from '@shared/hooks/useLocationNames';
 
 interface AvailabilityCheckerProps {
   asset: Asset | null;
@@ -44,6 +44,7 @@ export const AvailabilityChecker: React.FC<AvailabilityCheckerProps> = ({
   isOpen,
   onClose,
 }) => {
+  const resolveLocation = useLocationNames();
   const [loading, setLoading] = useState(false);
   const [resultado, setResultado] = useState<DisponibilidadResponse | null>(null);
   const [solicitado, setSolicitado] = useState(false);
@@ -137,7 +138,7 @@ export const AvailabilityChecker: React.FC<AvailabilityCheckerProps> = ({
             <div className="bg-slate-50 rounded-lg p-3 col-span-2">
               <p className="text-slate-400 mb-0.5">Ubicación</p>
               <p className="font-medium text-slate-700">
-                {[asset.area ? AREA_LABELS[asset.area] : undefined, asset.bahia, asset.rack, asset.caja].filter(Boolean).join(' > ') || asset.ubicacion || '—'}
+                {[resolveLocation(asset.area), resolveLocation(asset.bahia), resolveLocation(asset.rack), resolveLocation(asset.caja)].filter(Boolean).join(' > ') || asset.ubicacion || '—'}
               </p>
             </div>
           </div>

@@ -8,8 +8,8 @@ import { AssetCard } from './AssetCard';
 import { AssetFilterPanel } from './AssetFilterPanel';
 import { AssetDetailModal } from './AssetDetailModal';
 import { AvailabilityChecker } from './AvailabilityChecker';
-import { AREA_LABELS } from '@shared/types/enums';
 import { SearchParams, getAreas, AreaAPI } from '../../services/assetService';
+import { useLocationNames } from '@shared/hooks/useLocationNames';
 
 export const AssetCatalog: React.FC = () => {
   const assets = useAssets();
@@ -239,8 +239,9 @@ const ESTADO_LABELS: Record<string, string> = {
 };
 
 function AssetListRow({ asset, onView, onSolicitarPrestamo }: RowProps) {
+  const resolveLocation = useLocationNames();
   const estadoOp = (asset as any).estadoOperativo ?? 'disponible';
-  const ubicacion = [asset.area ? AREA_LABELS[asset.area] : undefined, asset.bahia, asset.rack, asset.caja].filter(Boolean).join(' > ') || asset.ubicacion || '—';
+  const ubicacion = [resolveLocation(asset.area), resolveLocation(asset.bahia), resolveLocation(asset.rack), resolveLocation(asset.caja)].filter(Boolean).join(' > ') || asset.ubicacion || '—';
 
   return (
     <motion.div

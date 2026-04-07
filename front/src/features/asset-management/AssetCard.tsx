@@ -3,7 +3,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { MapPin, Eye, Wrench, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { Asset } from '../../data/mockData';
-import { AREA_LABELS } from '@shared/types/enums';
+import { useLocationNames } from '@shared/hooks/useLocationNames';
 
 interface AssetCardProps {
   asset: Asset;
@@ -35,12 +35,13 @@ const ESTADO_CONFIG: Record<string, { label: string; color: string; icon: React.
 };
 
 export const AssetCard: React.FC<AssetCardProps> = ({ asset, onView, onSolicitarPrestamo }) => {
+  const resolveLocation = useLocationNames();
   const estadoOp = (asset as any).estadoOperativo ?? 'disponible';
   const estadoCfg = ESTADO_CONFIG[estadoOp] ?? ESTADO_CONFIG['disponible'];
   const estaDisponible = estadoOp === 'disponible';
 
-  // Construir texto de ubicación
-  const ubicacion = [asset.area ? AREA_LABELS[asset.area] : undefined, asset.bahia, asset.rack, asset.caja]
+  // Construir texto de ubicación usando nombres legibles (nunca UUIDs)
+  const ubicacion = [resolveLocation(asset.area), resolveLocation(asset.bahia), resolveLocation(asset.rack), resolveLocation(asset.caja)]
     .filter(Boolean)
     .join(' > ') || asset.ubicacion || '—';
 

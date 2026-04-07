@@ -364,8 +364,42 @@ export interface LocationTreeAPI {
   areas: AreaAPI[];
   bahias: BahiaAPI[];
   racks: RackAPI[];
+  cajas: CajaAPI[];
 }
 
 export async function getLocationTree(): Promise<LocationTreeAPI> {
   return httpClient.get<LocationTreeAPI>('/api/locations/tree');
+}
+
+// ==================== LOCATION NAMES CACHE ====================
+// Fetched once and shared across all components — UUIDs are never shown in the UI.
+
+let _locationNamesCache: Record<string, string> | null = null;
+let _locationNamesPromise: Promise<Record<string, string>> | null = null;
+
+export async function getLocationNamesMap(): Promise<Record<string, string>> {
+  if (_locationNamesCache) return _locationNamesCache;
+  if (_locationNamesPromise) return _locationNamesPromise;
+
+  _locationNamesPromise = getLocationTree()
+    .then((tree) => {
+      const map: Record<string, string> = {};
+      for (const a of tree.areas)  map[a.id] = a.nombre;
+      for (const b of tree.bahias) map[b.id] = b.nombre;
+      for (const r of tree.racks)  map[r.id] = r.nombre;
+      for (const c of (tree.cajas ?? [])) map[c.id] = c.numero;
+      _locationNamesCache = map;
+      return map;
+    })
+    .catch(() => {
+      _locationNamesPromise = null;
+      return {};
+    });
+
+  return _locationNamesPromise;
+}
+
+export function invalidateLocationNamesCache(): void {
+  _locationNamesCache = null;
+  _locationNamesPromise = null;
 }

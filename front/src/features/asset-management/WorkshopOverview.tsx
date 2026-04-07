@@ -8,7 +8,7 @@ import {
 import { useAssets } from '../../shared/context/AssetContext';
 import { Asset } from '../../data/mockData';
 import { EstadisticasResponse, getEstadisticas } from '../../services/assetService';
-import { AREA_LABELS } from '@shared/types/enums';
+import { useLocationNames } from '@shared/hooks/useLocationNames';
 import { useNavigate } from 'react-router-dom';
 
 // ─── StatCard ────────────────────────────────────────────────────────────────
@@ -100,6 +100,7 @@ function AreaDistributionChart({ assets }: { assets: Asset[] }) {
 export const WorkshopOverview: React.FC = () => {
   const assets = useAssets();
   const navigate = useNavigate();
+  const resolveLocation = useLocationNames();
   const [estadisticas, setEstadisticas] = useState<EstadisticasResponse | null>(null);
   const [filtroEstado, setFiltroEstado] = useState<string>('');
 
@@ -237,7 +238,7 @@ export const WorkshopOverview: React.FC = () => {
           {/* Filas */}
           <div className="overflow-y-auto max-h-[420px]">
             {filteredAssets.slice(0, 50).map(asset => {
-              const ubicacion = [asset.area ? AREA_LABELS[asset.area] : undefined, asset.bahia, asset.rack].filter(Boolean).join(' > ') || asset.ubicacion || '—';
+              const ubicacion = [resolveLocation(asset.area), resolveLocation(asset.bahia), resolveLocation(asset.rack)].filter(Boolean).join(' > ') || asset.ubicacion || '—';
               return (
                 <div
                   key={asset.id}
