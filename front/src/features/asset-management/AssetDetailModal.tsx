@@ -18,6 +18,8 @@ import { Asset } from '../../data/mockData';
 import { calcDepreciation } from '@shared/utils/depreciation';
 import { ConfirmModal } from '@shared/components';
 import { FichaTecnicaPreviewModal } from './FichaTecnicaPreviewModal';
+import { HistorialMovimientosModal } from './HistorialMovimientosModal';
+import { ReportarFallaModal } from './ReportarFallaModal';
 import { getAreas, AreaAPI } from '../../services/assetService';
 
 interface AssetDetailModalProps {
@@ -40,6 +42,8 @@ export function AssetDetailModal({
   // Hooks must be called unconditionally — guard is done inside JSX below
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [showHistorial, setShowHistorial] = useState(false);
+  const [showReportarFalla, setShowReportarFalla] = useState(false);
   const [areas, setAreas] = useState<AreaAPI[]>([]);
 
   useEffect(() => {
@@ -452,14 +456,14 @@ export function AssetDetailModal({
                   </button>
                   <button
                     className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
-                    onClick={() => alert('Historial de movimientos — próximamente')}
+                    onClick={() => setShowHistorial(true)}
                   >
                     <History size={14} />
                     Ver Historial
                   </button>
                   <button
                     className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
-                    onClick={() => alert('Reportar falla — próximamente')}
+                    onClick={() => setShowReportarFalla(true)}
                   >
                     <AlertOctagon size={14} />
                     Reportar Falla
@@ -476,6 +480,21 @@ export function AssetDetailModal({
         asset={asset}
         isOpen={showPdfPreview}
         onClose={() => setShowPdfPreview(false)}
+      />
+
+      {/* Historial de Movimientos Modal */}
+      <HistorialMovimientosModal
+        assetId={asset?.id ?? null}
+        assetNombre={asset?.descripcion ?? ''}
+        isOpen={showHistorial}
+        onClose={() => setShowHistorial(false)}
+      />
+
+      {/* Reportar Falla Modal */}
+      <ReportarFallaModal
+        asset={asset}
+        isOpen={showReportarFalla}
+        onClose={() => setShowReportarFalla(false)}
       />
 
       {/* Confirm delete — rendered outside AnimatePresence so it stacks above the modal */}
