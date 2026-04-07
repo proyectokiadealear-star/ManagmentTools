@@ -40,6 +40,7 @@ const defaultAsset: Partial<Asset> = {
   itemProveedor: '',
   capacidadEspecificacion: '',
   periodicidad: '',
+  fechaUltimoMantenimiento: '',
   imagenUrl: '',
 };
 export function AssetFormModal({
@@ -679,6 +680,45 @@ export function AssetFormModal({
                       className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500" />
                     
                   </div>
+                </div>
+              </div>
+
+              {/* Mantenimiento */}
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900 border-b border-slate-200 pb-2 mb-4">
+                  Planificación de Mantenimiento
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Periodicidad
+                    </label>
+                    <select
+                      name="periodicidad"
+                      value={formData.periodicidad}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500">
+                      <option value="">-- Sin periodicidad --</option>
+                      <option value="Mensual">Mensual</option>
+                      <option value="Trimestral">Trimestral</option>
+                      <option value="Semestral">Semestral</option>
+                      <option value="Anual">Anual</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Fecha Último Mantenimiento
+                    </label>
+                    <input
+                      type="date"
+                      name="fechaUltimoMantenimiento"
+                      value={formData.fechaUltimoMantenimiento ?? ''}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500" />
+                  </div>
+                </div>
+                <div className="mt-3 px-3 py-2 bg-amber-50 border border-amber-100 rounded-md text-xs text-amber-700">
+                  Al guardar, el sistema calculará automáticamente la fecha del próximo mantenimiento (último + periodicidad) y lo registrará en Planificación y Semáforo.
                 </div>
               </div>
             </form>

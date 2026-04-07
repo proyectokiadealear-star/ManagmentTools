@@ -11,6 +11,8 @@ import {
   UploadedFile,
   UseInterceptors,
   BadRequestException,
+  NotFoundException,
+  StreamableFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -141,6 +143,26 @@ export class AssetsController {
   @ApiResponse({ status: 200, description: 'Lista de movimientos ordenados por fecha DESC' })
   getMovimientos(@Param('id') id: string) {
     return this.assetsService.getMovimientos(id);
+  }
+
+  @Get(':id/imagen-proxy')
+  @ApiOperation({ summary: 'Proxy de imagen del activo — evita restricciones CORS del bucket de almacenamiento' })
+  @ApiParam({ name: 'id', description: 'ID del activo', example: 'A001' })
+  @ApiResponse({ status: 200, description: 'Imagen del activo en su formato original' })
+  @ApiResponse({ status: 404, description: 'El activo no tiene imagen registrada' })
+  async proxyImagen(@Param('id') id: string): Promise<StreamableFile> {
+    const activo = await this.assetsService.findOne(id);
+    const imagenUrl = activo.imagenUrl;
+    if (!imagenUrl || imagenUrl.includes('placehold.co')) {
+      throw new NotFoundException('El activo no tiene imagen registrada.');
+    }
+    const imgRes = await fetch(imagenUrl);
+    if (!imgRes.ok) {
+      throw new BadRequestException('No se pudo obtener la imagen del activo.');
+    }
+    const contentType = imgRes.headers.get('content-type') ?? 'image/jpeg';
+    const buffer = Buffer.from(await imgRes.arrayBuffer());
+    return new StreamableFile(buffer, { type: contentType });
   }
 
   @Post(':id/imagen')

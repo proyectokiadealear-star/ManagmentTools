@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Filter, Eye, MapPin, Plus, Edit, Trash2, LayoutList, LayoutGrid, Wrench, CheckCircle, XCircle, FileDown } from 'lucide-react';
 import { Asset } from '../../data/mockData';
 import { AssetDetailModal } from './AssetDetailModal';
 import { AssetFormModal } from './AssetFormModal';
+import { FichaTecnicaPreviewModal } from './FichaTecnicaPreviewModal';
 import { useAssets, useAssetContext } from '@shared/context/AssetContext';
-import { AREA_LABELS } from '@shared/types/enums';
 import { ConfirmModal } from '@shared/components';
-import { generateFichaTecnicaPdf } from '@shared/utils/fichaTecnicaPdf';
+import { getLocationTree } from '@services/assetService';
 
 function SkeletonRow() {
   return (
@@ -32,12 +32,25 @@ export function Inventory() {
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [assetToEdit, setAssetToEdit] = useState<Asset | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [pdfPreviewAsset, setPdfPreviewAsset] = useState<Asset | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToast({ type, text });
     setTimeout(() => setToast(null), 3500);
   };
+
+  const [areaMap, setAreaMap] = useState<Record<string, string>>({});
+  const [bahiaMap, setBahiaMap] = useState<Record<string, string>>({});
+  const [rackMap, setRackMap] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    getLocationTree().then(({ areas, bahias, racks }) => {
+      setAreaMap(Object.fromEntries(areas.map(a => [a.id, a.nombre])));
+      setBahiaMap(Object.fromEntries(bahias.map(b => [b.id, b.nombre])));
+      setRackMap(Object.fromEntries(racks.map(r => [r.id, r.nombre])));
+    }).catch(() => {/* keep maps empty on error */});
+  }, []);
 
   const uniqueAreas = Array.from(new Set(assets.map((a) => a.area).filter(Boolean))) as string[];
 
@@ -143,7 +156,7 @@ export function Inventory() {
             className="py-2 px-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm text-slate-700 bg-white shadow-sm">
             <option value="">Todas las áreas</option>
             {uniqueAreas.map((area) => (
-              <option key={area} value={area}>{area}</option>
+              <option key={area} value={area}>{areaMap[area] ?? area}</option>
             ))}
           </select>
 
@@ -238,18 +251,18 @@ export function Inventory() {
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-1.5 text-slate-900 font-medium">
                         <MapPin size={14} className="text-blue-500" />
-                        {asset.area ? AREA_LABELS[asset.area] : asset.area}
+                        {areaMap[asset.area!] ?? asset.area}
                       </div>
                       {asset.bahia && (
                         <div className="flex items-center gap-1.5 text-xs text-slate-500 pl-5">
                           <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                          {asset.bahia}
+                          {bahiaMap[asset.bahia] ?? asset.bahia}
                         </div>
                       )}
                       {asset.rack && (
                         <div className="flex items-center gap-1.5 text-xs text-slate-400 pl-5">
                           <span className="w-1 h-1 rounded-full bg-slate-200"></span>
-                          {asset.rack}
+                          {rackMap[asset.rack] ?? asset.rack}
                         </div>
                       )}
                       {asset.caja && (
@@ -288,9 +301,9 @@ export function Inventory() {
                         <Eye size={18} />
                       </button>
                       <button
-                      onClick={() => generateFichaTecnicaPdf(asset)}
+                      onClick={() => setPdfPreviewAsset(asset)}
                       className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
-                      title="Descargar Ficha Técnica PDF">
+                      title="Ver Ficha Técnica PDF">
                         <FileDown size={18} />
                       </button>
                       <button
@@ -368,11 +381,11 @@ export function Inventory() {
                     <div className="flex flex-col gap-0.5 text-xs">
                       <div className="flex items-center gap-1 text-slate-700 font-medium">
                         <MapPin size={12} className="text-blue-500 shrink-0" />
-                        {asset.area ? AREA_LABELS[asset.area] : '—'}
+                        {areaMap[asset.area!] ?? asset.area ?? '—'}
                       </div>
                       {asset.bahia && (
                         <p className="text-slate-500 pl-4">
-                          {asset.bahia}{asset.rack ? ` / ${asset.rack}` : ''}
+                          {bahiaMap[asset.bahia] ?? asset.bahia}{asset.rack ? ` / ${rackMap[asset.rack] ?? asset.rack}` : ''}
                         </p>
                       )}
                     </div>
@@ -392,9 +405,9 @@ export function Inventory() {
                       <Eye size={16} />
                     </button>
                     <button
-                      onClick={() => generateFichaTecnicaPdf(asset)}
+                      onClick={() => setPdfPreviewAsset(asset)}
                       className="flex-1 flex items-center justify-center p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
-                      title="Descargar Ficha Técnica PDF">
+                      title="Ver Ficha Técnica PDF">
                       <FileDown size={16} />
                     </button>
                     <button
@@ -448,6 +461,12 @@ export function Inventory() {
         confirmLabel="Sí, eliminar"
         cancelLabel="Cancelar"
         variant="danger"
+      />
+
+      <FichaTecnicaPreviewModal
+        asset={pdfPreviewAsset}
+        isOpen={pdfPreviewAsset !== null}
+        onClose={() => setPdfPreviewAsset(null)}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -12,12 +12,13 @@ import {
   Send,
   History,
   AlertOctagon,
+  CalendarClock,
 } from 'lucide-react';
 import { Asset } from '../../data/mockData';
 import { calcDepreciation } from '@shared/utils/depreciation';
-import { AREA_LABELS } from '@shared/types/enums';
 import { ConfirmModal } from '@shared/components';
-import { generateFichaTecnicaPdf } from '@shared/utils/fichaTecnicaPdf';
+import { FichaTecnicaPreviewModal } from './FichaTecnicaPreviewModal';
+import { getAreas, AreaAPI } from '../../services/assetService';
 
 interface AssetDetailModalProps {
   asset: Asset | null;
@@ -38,19 +39,42 @@ export function AssetDetailModal({
 }: AssetDetailModalProps) {
   // Hooks must be called unconditionally — guard is done inside JSX below
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
-  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [areas, setAreas] = useState<AreaAPI[]>([]);
 
-  const handleDownloadFicha = async () => {
-    if (!asset || generatingPdf) return;
-    setGeneratingPdf(true);
-    try {
-      await generateFichaTecnicaPdf(asset);
-    } catch (err) {
-      console.error('Error generando ficha técnica:', err);
-    } finally {
-      setGeneratingPdf(false);
-    }
+  useEffect(() => {
+    getAreas().then(setAreas).catch(() => {});
+  }, []);
+
+  const getAreaNombre = (areaId: string | undefined) => {
+    if (!areaId) return 'No definida';
+    const found = areas.find(a => a.id === areaId);
+    return found ? found.nombre : areaId;
   };
+
+  // Calcular próximo mantenimiento a partir del último + periodicidad
+  const calcProximoMantenimiento = () => {
+    if (!asset?.fechaUltimoMantenimiento || !asset?.periodicidad) return null;
+    const periodicidadMap: Record<string, number> = {
+      mensual: 30, trimestral: 90, semestral: 180, anual: 365,
+    };
+    const dias = periodicidadMap[asset.periodicidad.toLowerCase()] ?? 365;
+    const ultimo = new Date(asset.fechaUltimoMantenimiento);
+    const proximo = new Date(ultimo);
+    proximo.setDate(proximo.getDate() + dias);
+    const diasRestantes = Math.ceil((proximo.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    let semaforo: 'verde' | 'amarillo' | 'rojo' = 'verde';
+    if (diasRestantes <= 0) semaforo = 'rojo';
+    else if (diasRestantes <= 30) semaforo = 'amarillo';
+    return {
+      proximo: proximo.toISOString().split('T')[0],
+      diasRestantes,
+      semaforo,
+    };
+  };
+  const mant = asset ? calcProximoMantenimiento() : null;
+
+  const handleOpenPdfPreview = () => setShowPdfPreview(true);
 
   // Compute depreciation only when we have a valid asset
   const dep = asset
@@ -185,7 +209,7 @@ export function AssetDetailModal({
                           <div>
                             <p className="text-xs text-slate-500 mb-1">Área</p>
                             <p className="text-sm font-medium text-slate-900">
-                              {asset.area ? AREA_LABELS[asset.area] : 'No definida'}
+                              {getAreaNombre(asset.area)}
                             </p>
                           </div>
                           <div>
@@ -301,6 +325,68 @@ export function AssetDetailModal({
                             <p className="text-[10px] text-blue-500 mt-0.5">
                               de {asset.vidaUtil} años útiles
                             </p>
+                            <div className="mt-2 w-full bg-blue-100 rounded-full h-1.5">
+                              <div
+                                className={`h-1.5 rounded-full ${dep.isFullyDepreciated ? 'bg-rose-500' : 'bg-blue-500'}`}
+                                style={{ width: `${Math.min(100, dep.porcentajeDepreciado)}%` }}
+                              />
+                            </div>
+                            <p className="text-[10px] text-blue-400 mt-1">{dep.porcentajeDepreciado}% depreciado</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Planificación de Mantenimiento */}
+                      {(asset.fechaUltimoMantenimiento || asset.periodicidad) && (
+                        <div>
+                          <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-900 mb-3 border-b border-slate-100 pb-2">
+                            <CalendarClock size={16} className="text-violet-500" />
+                            Planificación de Mantenimiento
+                          </h4>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                              <p className="text-xs text-slate-500 mb-1">Último Mantenimiento</p>
+                              <p className="text-sm font-medium text-slate-900">
+                                {asset.fechaUltimoMantenimiento || '—'}
+                              </p>
+                            </div>
+                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                              <p className="text-xs text-slate-500 mb-1">Periodicidad</p>
+                              <p className="text-sm font-medium text-slate-900">
+                                {asset.periodicidad || '—'}
+                              </p>
+                            </div>
+                            {mant ? (
+                              <div className={`p-3 rounded-lg border text-center ${
+                                mant.semaforo === 'rojo' ? 'bg-rose-50 border-rose-200' :
+                                mant.semaforo === 'amarillo' ? 'bg-amber-50 border-amber-200' :
+                                'bg-emerald-50 border-emerald-200'
+                              }`}>
+                                <p className={`text-xs mb-1 font-semibold ${
+                                  mant.semaforo === 'rojo' ? 'text-rose-600' :
+                                  mant.semaforo === 'amarillo' ? 'text-amber-600' :
+                                  'text-emerald-600'
+                                }`}>Próximo Mantenimiento</p>
+                                <p className={`text-sm font-bold ${
+                                  mant.semaforo === 'rojo' ? 'text-rose-700' :
+                                  mant.semaforo === 'amarillo' ? 'text-amber-700' :
+                                  'text-emerald-700'
+                                }`}>{mant.proximo}</p>
+                                <p className={`text-[10px] mt-0.5 ${
+                                  mant.semaforo === 'rojo' ? 'text-rose-500' :
+                                  mant.semaforo === 'amarillo' ? 'text-amber-500' :
+                                  'text-emerald-500'
+                                }`}>
+                                  {mant.diasRestantes < 0
+                                    ? `${Math.abs(mant.diasRestantes)}d atrasado`
+                                    : `+${mant.diasRestantes}d restantes`}
+                                </p>
+                              </div>
+                            ) : asset.periodicidad && !asset.fechaUltimoMantenimiento ? (
+                              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center">
+                                <p className="text-xs text-slate-400">Sin fecha de último mantenimiento</p>
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       )}
@@ -358,12 +444,11 @@ export function AssetDetailModal({
                     </button>
                   )}
                   <button
-                    onClick={handleDownloadFicha}
-                    disabled={generatingPdf}
-                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                    onClick={handleOpenPdfPreview}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
                   >
                     <FileDown size={14} />
-                    {generatingPdf ? 'Generando...' : 'Ficha Técnica PDF'}
+                    Ficha Técnica PDF
                   </button>
                   <button
                     className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
@@ -385,6 +470,13 @@ export function AssetDetailModal({
           </>
         )}
       </AnimatePresence>
+
+      {/* PDF Preview Modal */}
+      <FichaTecnicaPreviewModal
+        asset={asset}
+        isOpen={showPdfPreview}
+        onClose={() => setShowPdfPreview(false)}
+      />
 
       {/* Confirm delete — rendered outside AnimatePresence so it stacks above the modal */}
       {asset && (

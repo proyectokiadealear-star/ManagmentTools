@@ -38,6 +38,7 @@ export interface ActivoAPI {
   observacion?: string;
   especificaciones?: string;
   capacidad?: string;
+  fechaUltimoMantenimiento?: string;
   imagenUrl?: string;
   createdAt: string;
   updatedAt: string;
@@ -142,6 +143,7 @@ export function mapActivoToAsset(a: ActivoAPI): Asset {
     itemProveedor:           a.itemProveedor ?? '',
     capacidadEspecificacion: a.capacidadEspecificacion ?? a.capacidad ?? a.especificaciones ?? '',
     periodicidad:            a.periodicidad ?? '',
+    fechaUltimoMantenimiento: a.fechaUltimoMantenimiento,
     imagenUrl:               a.imagenUrl,
   };
 }
@@ -172,7 +174,7 @@ function mapAssetToDto(data: Partial<Asset>): Record<string, unknown> {
     'proveedor', 'factura', 'fechaCompra', 'valor', 'vidaUtil',
     'capacidadEspecificacion', 'periodicidad', 'itemProveedor',
     'responsable', 'custodio', 'encargado', 'comentario',
-    'observacion', 'imagenUrl',
+    'observacion', 'fechaUltimoMantenimiento', 'imagenUrl',
   ];
   for (const key of directFields) {
     if (data[key] !== undefined) dto[key] = data[key];
@@ -356,4 +358,14 @@ export async function updateCaja(id: string, data: Partial<CajaAPI>): Promise<Ca
 
 export async function deleteCaja(id: string): Promise<void> {
   await httpClient.delete(`/api/cajas/${id}`);
+}
+
+export interface LocationTreeAPI {
+  areas: AreaAPI[];
+  bahias: BahiaAPI[];
+  racks: RackAPI[];
+}
+
+export async function getLocationTree(): Promise<LocationTreeAPI> {
+  return httpClient.get<LocationTreeAPI>('/api/locations/tree');
 }

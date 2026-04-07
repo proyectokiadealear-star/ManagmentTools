@@ -78,7 +78,132 @@ export class AssetsService {
     );
 
     const docRef = await this.firestore.collection('activos').add(cleanData);
-    return { id: docRef.id, ...activo };
+    const activoCreado: Activo = { id: docRef.id, ...activo };
+
+    // Si se indicó fecha del último mantenimiento, crear programación automáticamente
+    if (createActivoDto.fechaUltimoMantenimiento) {
+      await this.crearProgramacionMantenimiento(
+        docRef.id,
+        createActivoDto,
+        usuarioId,
+        now,
+      );
+    }
+
+    return activoCreado;
+  }
+
+  private buildProgramacionData(
+    activoId: string,
+    fields: {
+      nombre: string;
+      periodicidad?: string;
+      fechaUltimoMantenimiento: string;
+      responsable?: string;
+      custodio?: string;
+    },
+    creadoPor: string,
+    now: string,
+  ) {
+    const periodicidadMap: Record<string, number> = {
+      mensual: 30,
+      trimestral: 90,
+      semestral: 180,
+      anual: 365,
+    };
+    const periodicidadDias =
+      periodicidadMap[(fields.periodicidad ?? '').toLowerCase()] ?? 365;
+
+    // Calcular próximo mantenimiento sumando la periodicidad al último
+    const ultimoDate = new Date(fields.fechaUltimoMantenimiento);
+    const proximoDate = new Date(ultimoDate);
+    proximoDate.setDate(proximoDate.getDate() + periodicidadDias);
+    const proximo = proximoDate.toISOString().split('T')[0];
+
+    const diasRestantes = Math.ceil(
+      (proximoDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+    );
+    const estado =
+      diasRestantes <= 0 ? 'vencido' : diasRestantes <= 15 ? 'proximo' : 'vigente';
+
+    return {
+      activoId,
+      activoNombre: fields.nombre,
+      tipo: 'preventivo',
+      periodicidadDias,
+      ultimoMantenimiento: fields.fechaUltimoMantenimiento,
+      proximoMantenimiento: proximo,
+      responsableId: creadoPor,
+      responsableNombre: fields.responsable ?? fields.custodio ?? '',
+      estado,
+      creadoPor,
+      fechaCreacion: now,
+    };
+  }
+
+  private async crearProgramacionMantenimiento(
+    activoId: string,
+    dto: CreateActivoDto,
+    creadoPor: string,
+    now: string,
+  ): Promise<void> {
+    const data = this.buildProgramacionData(
+      activoId,
+      {
+        nombre: dto.nombre,
+        periodicidad: dto.periodicidad,
+        fechaUltimoMantenimiento: dto.fechaUltimoMantenimiento!,
+        responsable: dto.responsable,
+        custodio: dto.custodio,
+      },
+      creadoPor,
+      now,
+    );
+
+    const cleanProg = Object.fromEntries(
+      Object.entries(data).filter(([, v]) => v !== undefined && v !== ''),
+    );
+
+    await this.firestore.collection('programacion_mantenimiento').add(cleanProg);
+    this.logger.log(`Programación de mantenimiento creada para activo ${activoId}`);
+  }
+
+  private async upsertProgramacionMantenimiento(
+    activoId: string,
+    fields: {
+      nombre: string;
+      periodicidad?: string;
+      fechaUltimoMantenimiento: string;
+      responsable?: string;
+      custodio?: string;
+    },
+    creadoPor: string,
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    const data = this.buildProgramacionData(activoId, fields, creadoPor, now);
+
+    const cleanData = Object.fromEntries(
+      Object.entries(data).filter(([, v]) => v !== undefined && v !== ''),
+    );
+
+    // Buscar programación preventiva existente para este activo
+    const existing = await this.firestore
+      .collection('programacion_mantenimiento')
+      .where('activoId', '==', activoId)
+      .where('tipo', '==', 'preventivo')
+      .limit(1)
+      .get();
+
+    if (!existing.empty) {
+      const docId = existing.docs[0].id;
+      // Preservar creadoPor y fechaCreacion originales
+      const { creadoPor: _cp, fechaCreacion: _fc, ...updateFields } = cleanData;
+      await this.firestore.collection('programacion_mantenimiento').doc(docId).update(updateFields);
+      this.logger.log(`Programación de mantenimiento actualizada para activo ${activoId}`);
+    } else {
+      await this.firestore.collection('programacion_mantenimiento').add(cleanData);
+      this.logger.log(`Programación de mantenimiento creada para activo ${activoId}`);
+    }
   }
 
   async update(id: string, updateActivoDto: UpdateActivoDto): Promise<Activo> {
@@ -96,6 +221,18 @@ export class AssetsService {
     );
 
     await this.firestore.collection('activos').doc(id).update(cleanUpdate);
+
+    // Upsert programacion si se actualizó la fecha del último mantenimiento
+    if (updateActivoDto.fechaUltimoMantenimiento) {
+      await this.upsertProgramacionMantenimiento(id, {
+        nombre: updateActivoDto.nombre ?? existente.nombre,
+        periodicidad: updateActivoDto.periodicidad ?? existente.periodicidad,
+        fechaUltimoMantenimiento: updateActivoDto.fechaUltimoMantenimiento,
+        responsable: updateActivoDto.responsable ?? existente.responsable,
+        custodio: updateActivoDto.custodio ?? existente.custodio,
+      }, existente.usuarioId ?? 'sistema');
+    }
+
     return actualizado;
   }
 

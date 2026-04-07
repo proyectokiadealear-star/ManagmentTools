@@ -7,6 +7,15 @@ import { LocationsService } from './locations.service';
 export class LocationsController {
   constructor(private readonly locationsService: LocationsService) {}
 
+  // ── LOCATION TREE ──
+
+  @Get('locations/tree')
+  @ApiOperation({ summary: 'Árbol completo de ubicaciones (areas, bahias, racks)' })
+  @ApiResponse({ status: 200, description: 'Árbol de ubicaciones' })
+  findLocationTree() {
+    return this.locationsService.findLocationTree();
+  }
+
   // ── AREAS ──
 
   @Get('areas')

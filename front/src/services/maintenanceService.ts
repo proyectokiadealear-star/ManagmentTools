@@ -6,14 +6,69 @@ import {
   FallaCorrectiva,
   CotizacionRegistro,
   ProformaServicio,
+  SemaforoEstado,
 } from '../data/mockData';
+
+// ---------------------------------------------------------------------------
+// Backend shape (ProgramacionConSemaforo)
+// ---------------------------------------------------------------------------
+
+interface ProgramacionAPI {
+  id: string;
+  activoId: string;
+  activoNombre: string;
+  tipo: string;
+  periodicidadDias: number;
+  ultimoMantenimiento?: string;
+  proximoMantenimiento: string;
+  responsableId: string;
+  responsableNombre: string;
+  estado: string;       // vigente | vencido | proximo | cancelado
+  semaforo: string;     // verde | amarillo | naranja | rojo
+  diasRestantes: number;
+  creadoPor: string;
+  fechaCreacion: string;
+}
+
+function mapProgramacionToMantenimiento(p: ProgramacionAPI): MantenimientoPreventivo {
+  const periodicidadMap: Record<number, MantenimientoPreventivo['periodicidad']> = {
+    30: 'Mensual',
+    90: 'Trimestral',
+    180: 'Semestral',
+    365: 'Anual',
+  };
+
+  // Backend can return 'naranja' which maps to 'amarillo' in the frontend schema
+  const semaforoMap: Record<string, SemaforoEstado> = {
+    verde: 'verde',
+    amarillo: 'amarillo',
+    naranja: 'amarillo',
+    rojo: 'rojo',
+  };
+
+  return {
+    id: p.id,
+    assetId: p.activoId,
+    assetDescripcion: p.activoNombre,
+    tipo: p.tipo,
+    periodicidad: periodicidadMap[p.periodicidadDias] ?? 'Anual',
+    ultimoMantenimiento: p.ultimoMantenimiento ?? '—',
+    proximoMantenimiento: p.proximoMantenimiento,
+    responsable: p.responsableNombre,
+    estado: semaforoMap[p.semaforo] ?? 'verde',
+    diasRestantes: p.diasRestantes,
+    ejecutado: false,
+    proformas: [],
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Mantenimientos Preventivos
 // ---------------------------------------------------------------------------
 
 export async function getMantenimientos(): Promise<MantenimientoPreventivo[]> {
-  return httpClient.get<MantenimientoPreventivo[]>('/api/mantenimientos/programacion');
+  const data = await httpClient.get<ProgramacionAPI[]>('/api/mantenimientos/programacion');
+  return data.map(mapProgramacionToMantenimiento);
 }
 
 export async function getMantenimientoById(

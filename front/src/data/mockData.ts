@@ -36,6 +36,7 @@ export interface Asset {
   itemProveedor: string;
   capacidadEspecificacion: string;
   periodicidad: string;
+  fechaUltimoMantenimiento?: string;
   imagenUrl?: string;
 }
 

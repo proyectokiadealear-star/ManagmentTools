@@ -121,6 +121,19 @@ export class LocationsService {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Caja));
   }
 
+  async findLocationTree(): Promise<{ areas: Area[]; bahias: Bahia[]; racks: Rack[] }> {
+    const [areasSnap, bahiasSnap, racksSnap] = await Promise.all([
+      this.firestore.collection('areas').get(),
+      this.firestore.collection('bahias').get(),
+      this.firestore.collection('racks').get(),
+    ]);
+    return {
+      areas: areasSnap.docs.map(d => ({ id: d.id, ...d.data() } as Area)),
+      bahias: bahiasSnap.docs.map(d => ({ id: d.id, ...d.data() } as Bahia)),
+      racks: racksSnap.docs.map(d => ({ id: d.id, ...d.data() } as Rack)),
+    };
+  }
+
   async createCaja(data: Omit<Caja, 'id'>): Promise<Caja> {
     const now = new Date().toISOString();
     const docRef = await this.firestore.collection('cajas').add({ ...data, createdAt: now, updatedAt: now });

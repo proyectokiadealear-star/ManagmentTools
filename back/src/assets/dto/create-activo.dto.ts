@@ -80,6 +80,11 @@ export class CreateActivoDto {
   @IsString()
   periodicidad?: string;
 
+  @ApiPropertyOptional({ example: '2026-01-15', description: 'Fecha del último mantenimiento ejecutado (YYYY-MM-DD). El próximo se calcula sumando la periodicidad.' })
+  @IsOptional()
+  @IsDateString()
+  fechaUltimoMantenimiento?: string;
+
   @ApiPropertyOptional({ example: 'K-GDS-01', description: 'Código del ítem según el proveedor' })
   @IsOptional()
   @IsString()

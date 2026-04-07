@@ -30,6 +30,7 @@ export interface Activo {
   especificaciones?: string;     // Legacy — prefer capacidadEspecificacion
   capacidad?: string;            // Legacy — prefer capacidadEspecificacion
   imagenUrl?: string;            // URL de fotografía principal
+  fechaUltimoMantenimiento?: string;  // Fecha del último mantenimiento ejecutado (el próximo se calcula con periodicidad)
   createdAt: string;
   updatedAt: string;
   usuarioId?: string;
