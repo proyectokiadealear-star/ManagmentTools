@@ -40,6 +40,9 @@ export const AssetCatalog: React.FC = () => {
   const filteredAssets = useMemo(() => {
     let resultado = [...assets];
 
+    // Excluir activos dados de baja del catálogo visual por defecto
+    resultado = resultado.filter(a => a.estado !== 'Dado de Baja');
+
     // Búsqueda por texto
     const q = query.trim().toLowerCase();
     if (q) {

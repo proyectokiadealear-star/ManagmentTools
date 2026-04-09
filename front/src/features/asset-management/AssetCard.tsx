@@ -1,7 +1,7 @@
 // AssetCard.tsx — Tarjeta individual del catálogo visual
 import React from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Eye, Wrench, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { MapPin, Eye, Wrench, AlertTriangle, CheckCircle, Clock, Ban } from 'lucide-react';
 import { Asset } from '../../data/mockData';
 import { useLocationNames } from '@shared/hooks/useLocationNames';
 
@@ -38,7 +38,8 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, onView, onSolicitar
   const resolveLocation = useLocationNames();
   const estadoOp = (asset as any).estadoOperativo ?? 'disponible';
   const estadoCfg = ESTADO_CONFIG[estadoOp] ?? ESTADO_CONFIG['disponible'];
-  const estaDisponible = estadoOp === 'disponible';
+  const esDadoDeBaja = asset.estado === 'Dado de Baja';
+  const estaDisponible = estadoOp === 'disponible' && !esDadoDeBaja;
 
   // Construir texto de ubicación usando nombres legibles (nunca UUIDs)
   const ubicacion = [resolveLocation(asset.area), resolveLocation(asset.bahia), resolveLocation(asset.rack), resolveLocation(asset.caja)]
@@ -60,21 +61,28 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, onView, onSolicitar
           <img
             src={asset.imagenUrl}
             alt={asset.descripcion}
-            className="w-full h-full object-cover"
+            className={`w-full h-full object-cover ${esDadoDeBaja ? 'opacity-40 grayscale' : ''}`}
           />
         ) : (
-          <div className="flex flex-col items-center gap-1 text-slate-400">
+          <div className={`flex flex-col items-center gap-1 ${esDadoDeBaja ? 'text-slate-300' : 'text-slate-400'}`}>
             <Wrench className="w-10 h-10" />
             <span className="text-xs">{asset.tipo}</span>
           </div>
         )}
-        {/* Badge estado operativo */}
-        <span
-          className={`absolute top-2 right-2 flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${estadoCfg.color}`}
-        >
-          {estadoCfg.icon}
-          {estadoCfg.label}
-        </span>
+        {/* Badge estado: Dado de Baja tiene prioridad */}
+        {esDadoDeBaja ? (
+          <span className="absolute top-2 right-2 flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-slate-100 text-slate-500 border-slate-300">
+            <Ban className="w-3.5 h-3.5" />
+            Dado de Baja
+          </span>
+        ) : (
+          <span
+            className={`absolute top-2 right-2 flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${estadoCfg.color}`}
+          >
+            {estadoCfg.icon}
+            {estadoCfg.label}
+          </span>
+        )}
       </div>
 
       {/* Contenido */}

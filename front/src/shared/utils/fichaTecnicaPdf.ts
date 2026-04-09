@@ -13,6 +13,7 @@ import { Asset } from '../../data/mockData';
 import { httpClient } from '../../services/httpClient';
 import { environment } from '../../environments/environment';
 import { calcDepreciation } from './depreciation';
+import { getLocationNamesMap } from '../../services/assetService';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const NAVY   = [26,  32,  60]  as [number, number, number];
@@ -127,47 +128,106 @@ function tableStyles() {
   };
 }
 
+// ─── Bottom-area constants ───────────────────────────────────────────────────
+const FOOTER_H   = 11;                     // navy footer band (mm)
+const SIG_H      = 18;                     // signature boxes  (mm)
+const BOTTOM_RSRV = FOOTER_H + SIG_H + 8; // total reserved at page bottom (mm)
+
+/** Draw the navy footer band on the current page. */
+function drawFooterBand(
+  doc: jsPDF, margin: number, cW: number, pageH: number, codigo: string,
+): void {
+  doc.setFillColor(...NAVY);
+  doc.rect(margin, pageH - FOOTER_H, cW, 9, 'F');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.5);
+  doc.setTextColor(190, 200, 220);
+  doc.text(
+    `SURMOTOR — Ficha Técnica  |  Código: ${codigo}  |  Generado: ${new Date().toLocaleDateString('es-EC')}`,
+    margin + cW / 2, pageH - 5.5, { align: 'center' },
+  );
+  doc.setTextColor(30, 30, 30);
+}
+
+/** Add a new page, draw footer, and return y = margin. */
+function breakPage(
+  doc: jsPDF, margin: number, cW: number, pageH: number, codigo: string,
+): number {
+  doc.addPage();
+  drawFooterBand(doc, margin, cW, pageH, codigo);
+  return margin;
+}
+
+/** If `needed` mm don't fit above the reserved bottom, break to next page. */
+function ensureSpace(
+  doc: jsPDF, y: number, needed: number,
+  margin: number, cW: number, pageH: number, codigo: string,
+): number {
+  return y + needed > pageH - BOTTOM_RSRV
+    ? breakPage(doc, margin, cW, pageH, codigo)
+    : y;
+}
+
 // ─── Core build: returns jsPDF document ──────────────────────────────────────
 
 async function buildDoc(asset: Asset): Promise<jsPDF> {
-  const [mantenimientos, programaciones, imageBase64] = await Promise.all([
+  const [mantenimientos, programaciones, imageBase64, locationNames] = await Promise.all([
     fetchMantenimientos(asset.id),
     fetchProgramaciones(asset.id),
     asset.imagenUrl
       ? loadImageAsBase64(`${environment.apiUrl}/api/activos/${asset.id}/imagen-proxy`)
       : Promise.resolve(null),
+    getLocationNamesMap(),
   ]);
 
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const pageW  = doc.internal.pageSize.getWidth();
-  const pageH  = doc.internal.pageSize.getHeight();
+  const areaNombre  = locationNames[asset.area  ?? ''] ?? safe(asset.area);
+  const bahiaNombre = locationNames[asset.bahia ?? ''] ?? safe(asset.bahia);
+  const rackNombre  = locationNames[asset.rack  ?? ''] ?? safe(asset.rack);
+  const cajaNombre  = locationNames[asset.caja  ?? ''] ?? safe(asset.caja);
+
+  const esDadoDeBaja = asset.estado === 'Dado de Baja';
+  const codeStr      = safe(asset.codigo);
+
+  const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageW  = doc.internal.pageSize.getWidth();   // 210 mm
+  const pageH  = doc.internal.pageSize.getHeight();  // 297 mm
   const margin = 13;
-  const cW     = pageW - margin * 2;   // 184 mm
-  // column plan: label=42, value=50, label=42, value=50 → total=184 ✓
+  const cW     = pageW - margin * 2;  // 184 mm
+
+  // 4-col label/value widths — must sum to cW: 42+50+42+50 = 184 ✓
   const L = 42, V = 50;
+
+  // Footer drawn immediately on page 1; autoTable pages handled via didDrawPage
+  drawFooterBand(doc, margin, cW, pageH, codeStr);
+
+  // Base options merged into every autoTable call
+  const atBase = () => ({
+    ...tableStyles(),
+    margin: { left: margin, right: margin, bottom: BOTTOM_RSRV },
+    didDrawPage: () => drawFooterBand(doc, margin, cW, pageH, codeStr),
+  });
 
   let y = margin;
 
   // ══════════════════════════════════════════════════════════════════════
   //  HEADER
   // ══════════════════════════════════════════════════════════════════════
-  const hH = 30;
-  const photoW = 52;
+  const hH     = 28;
+  const photoW = 48;
   const textW  = cW - photoW;
 
   doc.setFillColor(...NAVY);
   doc.rect(margin, y, cW, hH, 'F');
 
-  // --- Photo block (right side) ---
+  // Photo (right side)
   const pX = margin + textW + 1;
   const pY = y + 2;
   const pW = photoW - 3;
   const pH = hH - 4;
 
   if (imageBase64) {
-    try {
-      doc.addImage(imageBase64, 'JPEG', pX, pY, pW, pH, undefined, 'FAST');
-    } catch {
+    try { doc.addImage(imageBase64, 'JPEG', pX, pY, pW, pH, undefined, 'FAST'); }
+    catch {
       doc.setFillColor(40, 50, 80);
       doc.rect(pX, pY, pW, pH, 'F');
     }
@@ -178,39 +238,48 @@ async function buildDoc(asset: Asset): Promise<jsPDF> {
     doc.setTextColor(150, 160, 180);
     doc.text('Sin imagen', pX + pW / 2, pY + pH / 2 + 1, { align: 'center' });
   }
-  // thin white frame around photo
   doc.setDrawColor(...WHITE);
   doc.setLineWidth(0.4);
   doc.rect(pX, pY, pW, pH, 'S');
 
-  // --- Text block (left side) ---
+  // Text (left side)
   doc.setTextColor(...WHITE);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
-  doc.text('SURMOTOR', margin + 4, y + 11);
+  doc.text('SURMOTOR', margin + 4, y + 10);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
-  doc.text('Concesionario Autorizado KIA', margin + 4, y + 16.5);
-
-  // divider line
+  doc.text('Concesionario Autorizado KIA', margin + 4, y + 15.5);
   doc.setDrawColor(255, 255, 255);
   doc.setLineWidth(0.3);
-  doc.line(margin + 4, y + 18.5, margin + textW - 4, y + 18.5);
-
+  doc.line(margin + 4, y + 17.5, margin + textW - 4, y + 17.5);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('FICHA TÉCNICA DE EQUIPOS', margin + 4, y + 25);
-
+  doc.text('FICHA TÉCNICA DE EQUIPOS', margin + 4, y + 23.5);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.5);
   doc.setTextColor(190, 200, 220);
-  doc.text(`Gestión de Activos — ${formatDate(new Date().toISOString())}`, margin + 4, y + 29.5);
+  doc.text(`Gestión de Activos — ${formatDate(new Date().toISOString())}`, margin + 4, y + 27.5);
 
   y += hH + 1;
 
   // ══════════════════════════════════════════════════════════════════════
-  //  INFO BAR (código / placa / estado)
+  //  BANNER DADO DE BAJA
   // ══════════════════════════════════════════════════════════════════════
+  if (esDadoDeBaja) {
+    doc.setFillColor(180, 30, 30);
+    doc.rect(margin, y, cW, 7, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...WHITE);
+    doc.text('⚠  EQUIPO DADO DE BAJA — FUERA DE SERVICIO', margin + cW / 2, y + 4.8, { align: 'center' });
+    y += 8;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  INFO BAR (código / placa / estado / custodio)
+  // ══════════════════════════════════════════════════════════════════════
+  const infoBarFill: [number, number, number] = esDadoDeBaja ? [120, 40, 40] : [40, 50, 85];
   autoTable(doc, {
     startY: y,
     body: [[
@@ -223,9 +292,9 @@ async function buildDoc(asset: Asset): Promise<jsPDF> {
     styles: {
       fontSize: 7.5,
       fontStyle: 'bold',
-      cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 4 },
+      cellPadding: { top: 2, bottom: 2, left: 4, right: 4 },
       textColor: WHITE,
-      fillColor: [40, 50, 85] as [number, number, number],
+      fillColor: infoBarFill,
     },
     columnStyles: {
       0: { cellWidth: cW / 4 },
@@ -233,14 +302,15 @@ async function buildDoc(asset: Asset): Promise<jsPDF> {
       2: { cellWidth: cW / 4 },
       3: { cellWidth: cW / 4 },
     },
-    margin: { left: margin, right: margin },
-    tableWidth: cW,
+    margin: { left: margin, right: margin, bottom: BOTTOM_RSRV },
+    didDrawPage: () => drawFooterBand(doc, margin, cW, pageH, codeStr),
   });
-  y = (doc as any).lastAutoTable.finalY + 3;
+  y = (doc as any).lastAutoTable.finalY + 2;
 
   // ══════════════════════════════════════════════════════════════════════
-  //  SECCIÓN 1 — Datos generales  (4-col symmetric: L|V|L|V)
+  //  SECCIÓN 1 — Datos generales
   // ══════════════════════════════════════════════════════════════════════
+  y = ensureSpace(doc, y, 7 + 36, margin, cW, pageH, codeStr);
   y = drawSectionHeader(doc, margin, y, cW, 'DATOS GENERALES DEL EQUIPO');
 
   autoTable(doc, {
@@ -250,60 +320,53 @@ async function buildDoc(asset: Asset): Promise<jsPDF> {
       ['FABRICANTE / MARCA',   safe(asset.marca),        'MODELO',          safe(asset.modelo)],
       ['TIPO DE EQUIPO',       safe(asset.tipo),         'N° SERIE',        safe(asset.serial)],
       ['PLACA',                safe(asset.placa),        'ESTADO',          safe(asset.estado)],
-      ['SECCIÓN / ÁREA',       safe(asset.area),         'UBICACIÓN',       safe(asset.ubicacion || asset.bahia || '—')],
+      ['SECCIÓN / ÁREA',       areaNombre,               'BAHÍA',           bahiaNombre],
       ['RESPONSABLE',          safe(asset.responsable),  'CUSTODIO',        safe(asset.custodio)],
     ],
-    ...tableStyles(),
     columnStyles: {
       0: { fillColor: GREY, fontStyle: 'bold', cellWidth: L },
       1: { fillColor: LIGHT, cellWidth: V },
       2: { fillColor: GREY, fontStyle: 'bold', cellWidth: L },
       3: { fillColor: LIGHT, cellWidth: V },
     },
-    margin: { left: margin, right: margin },
-    tableWidth: cW,
+    ...atBase(),
   });
-  y = (doc as any).lastAutoTable.finalY + 3;
+  y = (doc as any).lastAutoTable.finalY + 2;
 
   // ══════════════════════════════════════════════════════════════════════
-  //  SECCIÓN 2 — Características técnicas  (2-col: label=60, value=124)
+  //  SECCIÓN 2 — Características técnicas
   // ══════════════════════════════════════════════════════════════════════
-  y = drawSectionHeader(doc, margin, y, cW, 'CARACTERÍSTICAS TÉCNICAS');
-
   const techRows: [string, string][] = [
-    ['ESPECIFICACIÓN / CAPACIDAD', safe(asset.capacidadEspecificacion)],
+    ['ESPECIFICACIÓN / CAPACIDAD',    safe(asset.capacidadEspecificacion)],
     ['PERIODICIDAD DE MANTENIMIENTO', safe(asset.periodicidad)],
-    ['PROVEEDOR HABITUAL', safe(asset.proveedor)],
-    ['ÍTEM / REF. PROVEEDOR', safe(asset.itemProveedor)],
-    ['N° FACTURA ADQUISICIÓN', safe(asset.factura)],
-    ['OBSERVACIONES', safe(asset.observacion)],
+    ['PROVEEDOR HABITUAL',            safe(asset.proveedor)],
+    ['ÍTEM / REF. PROVEEDOR',         safe(asset.itemProveedor)],
+    ['N° FACTURA ADQUISICIÓN',        safe(asset.factura)],
+    ['OBSERVACIONES',                 safe(asset.observacion)],
   ].filter(r => r[1] !== '—') as [string, string][];
-
   if (techRows.length === 0) techRows.push(['Sin datos técnicos adicionales', '']);
+
+  y = ensureSpace(doc, y, 7 + techRows.length * 6, margin, cW, pageH, codeStr);
+  y = drawSectionHeader(doc, margin, y, cW, 'CARACTERÍSTICAS TÉCNICAS');
 
   autoTable(doc, {
     startY: y,
     body: techRows,
-    ...tableStyles(),
     columnStyles: {
       0: { fillColor: GREY, fontStyle: 'bold', cellWidth: 60 },
       1: { fillColor: LIGHT, cellWidth: cW - 60 },
     },
-    margin: { left: margin, right: margin },
-    tableWidth: cW,
+    ...atBase(),
   });
-  y = (doc as any).lastAutoTable.finalY + 3;
+  y = (doc as any).lastAutoTable.finalY + 2;
 
   // ══════════════════════════════════════════════════════════════════════
   //  SECCIÓN 3 — Planificación de mantenimiento
   // ══════════════════════════════════════════════════════════════════════
-  y = drawSectionHeader(doc, margin, y, cW, 'PLANIFICACIÓN DE MANTENIMIENTO');
-
   const maintPlanRows: string[][] = programaciones.length > 0
     ? programaciones.map(p => [
         safe(asset.descripcion),
-        'SÍ',
-        '',
+        'SÍ', '',
         p.periodicidadDias ? `Cada ${p.periodicidadDias} días (${p.tipo})` : p.tipo,
         safe(p.proveedorHabitual),
         safe(p.responsableNombre),
@@ -317,32 +380,34 @@ async function buildDoc(asset: Asset): Promise<jsPDF> {
         safe(asset.responsable),
       ]];
 
+  y = ensureSpace(doc, y, 7 + 7 + maintPlanRows.length * 7, margin, cW, pageH, codeStr);
+  y = drawSectionHeader(doc, margin, y, cW, 'PLANIFICACIÓN DE MANTENIMIENTO');
+
   autoTable(doc, {
     startY: y,
     head: [['EQUIPO', 'APLICA', 'NO APLICA', 'FRECUENCIA', 'PROVEEDOR', 'RESPONSABLE']],
     body: maintPlanRows,
-    ...tableStyles(),
     headStyles: { fillColor: [55, 65, 100] as [number, number, number], textColor: WHITE, fontStyle: 'bold', fontSize: 7, halign: 'center' },
     columnStyles: {
-      0: { cellWidth: 38 },
+      0: { cellWidth: 40 },
       1: { cellWidth: 16, halign: 'center' },
-      2: { cellWidth: 16, halign: 'center' },
-      3: { cellWidth: 42 },
-      4: { cellWidth: 38 },
-      5: { cellWidth: cW - 38 - 16 - 16 - 42 - 38 },
+      2: { cellWidth: 18, halign: 'center' },
+      3: { cellWidth: 40 },
+      4: { cellWidth: 36 },
+      5: { cellWidth: cW - 40 - 16 - 18 - 40 - 36 },
     },
-    margin: { left: margin, right: margin },
-    tableWidth: cW,
+    ...atBase(),
   });
-  y = (doc as any).lastAutoTable.finalY + 3;
+  y = (doc as any).lastAutoTable.finalY + 2;
 
   // ══════════════════════════════════════════════════════════════════════
   //  SECCIÓN 4 — Historial de mantenimiento
   // ══════════════════════════════════════════════════════════════════════
+  y = ensureSpace(doc, y, 7 + 16, margin, cW, pageH, codeStr);
   y = drawSectionHeader(doc, margin, y, cW, 'HISTORIAL DE MANTENIMIENTO');
 
   if (mantenimientos.length > 0) {
-    const maxRows = 8;
+    const maxRows = 6;
     const histRows = mantenimientos.slice(0, maxRows).map(m => [
       formatDate(m.fechaRealizada),
       m.tipo.toUpperCase(),
@@ -356,139 +421,118 @@ async function buildDoc(asset: Asset): Promise<jsPDF> {
       startY: y,
       head: [['FECHA', 'TIPO', 'DESCRIPCIÓN', 'PROVEEDOR', 'COSTO', 'REALIZADO POR']],
       body: histRows,
-      ...tableStyles(),
       headStyles: { fillColor: [55, 65, 100] as [number, number, number], textColor: WHITE, fontStyle: 'bold', fontSize: 7, halign: 'center' },
       columnStyles: {
         0: { cellWidth: 24, halign: 'center' },
         1: { cellWidth: 22, halign: 'center' },
-        2: { cellWidth: 52 },
+        2: { cellWidth: 50 },
         3: { cellWidth: 36 },
         4: { cellWidth: 24, halign: 'right' },
-        5: { cellWidth: cW - 24 - 22 - 52 - 36 - 24 },
+        5: { cellWidth: cW - 24 - 22 - 50 - 36 - 24 },
       },
-      margin: { left: margin, right: margin },
-      tableWidth: cW,
+      ...atBase(),
     });
     y = (doc as any).lastAutoTable.finalY;
 
     if (mantenimientos.length > maxRows) {
+      y += 2;
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(6);
       doc.setTextColor(100, 100, 120);
-      y += 2;
       doc.text(`+ ${mantenimientos.length - maxRows} registros adicionales no mostrados`, margin + 2, y + 3);
       doc.setTextColor(30, 30, 30);
       y += 5;
     } else {
-      y += 3;
+      y += 2;
     }
   } else {
     doc.setFillColor(...LIGHT);
     doc.setDrawColor(...BORDER);
     doc.setLineWidth(0.25);
-    doc.rect(margin, y, cW, 10, 'FD');
+    doc.rect(margin, y, cW, 9, 'FD');
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(7);
     doc.setTextColor(150, 150, 160);
-    doc.text('Sin registros de mantenimiento', margin + cW / 2, y + 6.5, { align: 'center' });
+    doc.text('Sin registros de mantenimiento', margin + cW / 2, y + 5.5, { align: 'center' });
     doc.setTextColor(30, 30, 30);
-    y += 13;
+    y += 11;
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  //  SECCIÓN 5 — Datos financieros  (4-col symmetric)
+  //  SECCIÓN 5 — Datos financieros
   // ══════════════════════════════════════════════════════════════════════
-  y = drawSectionHeader(doc, margin, y, cW, 'DATOS FINANCIEROS Y DEPRECIACIÓN');
+  const dep       = calcDepreciation(asset.valor ?? 0, asset.fechaCompra ?? '', asset.vidaUtil ?? 5);
+  const lastMaint = mantenimientos.length > 0 ? mantenimientos[0] : null;
+  const nextProg  = programaciones.find(p => p.estado === 'vigente' || p.estado === 'proximo');
 
-  const dep = calcDepreciation(asset.valor ?? 0, asset.fechaCompra ?? '', asset.vidaUtil ?? 5);
-  const lastMaint  = mantenimientos.length > 0 ? mantenimientos[0] : null;
-  const nextProg   = programaciones.find(p => p.estado === 'vigente' || p.estado === 'proximo');
+  y = ensureSpace(doc, y, 7 + 24, margin, cW, pageH, codeStr);
+  y = drawSectionHeader(doc, margin, y, cW, 'DATOS FINANCIEROS Y DEPRECIACIÓN');
 
   autoTable(doc, {
     startY: y,
     body: [
-      ['VALOR ADQUISICIÓN', formatCurrency(asset.valor),                    'VALOR ACTUAL (DEP.)', formatCurrency(dep.currentValue)],
-      ['VIDA ÚTIL',         `${asset.vidaUtil ?? '—'} años`,               'DEP. ACUMULADA',      `${dep.porcentajeDepreciado.toFixed(1)}%`],
-      ['FECHA DE COMPRA',   formatDate(asset.fechaCompra),                  'PROVEEDOR',           safe(asset.proveedor)],
-      ['ÚLTIMO MTTO',       lastMaint ? formatDate(lastMaint.fechaRealizada) : '—',
-                                                                             'PRÓXIMO MTTO',        nextProg ? formatDate(nextProg.proximoMantenimiento) : formatDate(asset.fechaUltimoMantenimiento)],
+      ['VALOR ADQUISICIÓN',  formatCurrency(asset.valor),                         'VALOR ACTUAL (DEP.)', formatCurrency(dep.currentValue)],
+      ['VIDA ÚTIL',          `${asset.vidaUtil ?? '—'} años`,                     'DEP. ACUMULADA',      `${dep.porcentajeDepreciado.toFixed(1)}%`],
+      ['FECHA DE COMPRA',    formatDate(asset.fechaCompra),                        'PROVEEDOR',           safe(asset.proveedor)],
+      ['ÚLTIMO MTTO',        lastMaint ? formatDate(lastMaint.fechaRealizada) : '—',
+                                                                                    'PRÓXIMO MTTO',        nextProg ? formatDate(nextProg.proximoMantenimiento) : formatDate(asset.fechaUltimoMantenimiento)],
     ],
-    ...tableStyles(),
     columnStyles: {
       0: { fillColor: GREY, fontStyle: 'bold', cellWidth: L },
       1: { fillColor: LIGHT, cellWidth: V },
       2: { fillColor: GREY, fontStyle: 'bold', cellWidth: L },
       3: { fillColor: LIGHT, cellWidth: V },
     },
-    margin: { left: margin, right: margin },
-    tableWidth: cW,
+    ...atBase(),
   });
-  y = (doc as any).lastAutoTable.finalY + 3;
+  y = (doc as any).lastAutoTable.finalY + 2;
 
   // ══════════════════════════════════════════════════════════════════════
-  //  SECCIÓN 6 — Ubicación y observaciones  (4-col symmetric)
+  //  SECCIÓN 6 — Ubicación y observaciones
   // ══════════════════════════════════════════════════════════════════════
+  y = ensureSpace(doc, y, 7 + 24, margin, cW, pageH, codeStr);
   y = drawSectionHeader(doc, margin, y, cW, 'UBICACIÓN FÍSICA Y OBSERVACIONES');
 
   autoTable(doc, {
     startY: y,
     body: [
-      ['ÁREA',          safe(asset.area),        'BAHÍA',      safe(asset.bahia)],
-      ['RACK',          safe(asset.rack),         'CAJA',       safe(asset.caja)],
-      ['OBSERVACIONES', safe(asset.observacion),  'COMENTARIO', safe(asset.comentario)],
-      ['ENCARGADO',     safe(asset.encargado),    'CUSTODIO',   safe(asset.custodio)],
+      ['ÁREA',          areaNombre,              'BAHÍA',      bahiaNombre],
+      ['RACK',          rackNombre,              'CAJA',       cajaNombre],
+      ['OBSERVACIONES', safe(asset.observacion), 'COMENTARIO', safe(asset.comentario)],
+      ['ENCARGADO',     safe(asset.encargado),   'CUSTODIO',   safe(asset.custodio)],
     ],
-    ...tableStyles(),
     columnStyles: {
       0: { fillColor: GREY, fontStyle: 'bold', cellWidth: L },
       1: { fillColor: LIGHT, cellWidth: V },
       2: { fillColor: GREY, fontStyle: 'bold', cellWidth: L },
       3: { fillColor: LIGHT, cellWidth: V },
     },
-    margin: { left: margin, right: margin },
-    tableWidth: cW,
+    ...atBase(),
   });
-  y = (doc as any).lastAutoTable.finalY + 5;
 
   // ══════════════════════════════════════════════════════════════════════
-  //  FIRMAS
+  //  FIRMAS — posición fija sobre el footer en la última página
   // ══════════════════════════════════════════════════════════════════════
-  const sigW = (cW - 12) / 3;
-  const sigH = 18;
+  const sigY   = pageH - FOOTER_H - SIG_H - 4;   // ej: 297-11-18-4 = 264 mm
+  const sigW   = (cW - 12) / 3;                  // (184-12)/3 ≈ 57.3 mm c/u
   const sigLabels = ['RESPONSABLE DEL ACTIVO', 'RECIBIDO / REVISADO', 'AUTORIZADO POR'];
+
   for (let i = 0; i < 3; i++) {
     const sx = margin + i * (sigW + 6);
     doc.setFillColor(...LIGHT);
     doc.setDrawColor(...BORDER);
     doc.setLineWidth(0.25);
-    doc.rect(sx, y, sigW, sigH, 'FD');
-    // signature line
+    doc.rect(sx, sigY, sigW, SIG_H, 'FD');
     doc.setDrawColor(120, 120, 140);
     doc.setLineWidth(0.3);
-    doc.line(sx + 5, y + sigH - 6, sx + sigW - 5, y + sigH - 6);
+    doc.line(sx + 5, sigY + SIG_H - 6, sx + sigW - 5, sigY + SIG_H - 6);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(6.5);
     doc.setTextColor(60, 70, 100);
-    doc.text(sigLabels[i], sx + sigW / 2, y + sigH - 2, { align: 'center' });
+    doc.text(sigLabels[i], sx + sigW / 2, sigY + SIG_H - 2, { align: 'center' });
   }
-  y += sigH;
 
-  // ══════════════════════════════════════════════════════════════════════
-  //  FOOTER
-  // ══════════════════════════════════════════════════════════════════════
-  doc.setFillColor(...NAVY);
-  doc.rect(margin, pageH - 11, cW, 9, 'F');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.setTextColor(190, 200, 220);
-  doc.text(
-    `SURMOTOR — Ficha Técnica  |  Código: ${safe(asset.codigo)}  |  Generado: ${new Date().toLocaleDateString('es-EC')}`,
-    margin + cW / 2,
-    pageH - 5.5,
-    { align: 'center' },
-  );
-
-  void y; // suppress unused-variable warning
+  void pageW; // suppress unused-variable warning
   return doc;
 }
 

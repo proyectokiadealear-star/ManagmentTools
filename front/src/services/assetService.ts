@@ -106,14 +106,23 @@ export interface MovimientoAPI {
  *  - backend `cajaId`  → frontend `caja`
  */
 export function mapActivoToAsset(a: ActivoAPI): Asset {
-  // Map estadoOperativo → frontend estado label
-  const estadoMap: Record<string, 'Activo' | 'En Reparación' | 'Dado de Baja'> = {
-    disponible:        'Activo',
-    'en-prestamo':     'Activo',
-    'en-mantenimiento':'En Reparación',
-    danado:            'Dado de Baja',
-  };
-  const estado = estadoMap[a.estadoOperativo ?? 'disponible'] ?? 'Activo';
+  // El campo `estado` del backend (activo, inactivo, en-reparacion, dado-de-baja)
+  // tiene prioridad sobre estadoOperativo para determinar el estado del frontend.
+  let estado: 'Activo' | 'En Reparación' | 'Dado de Baja';
+  if (a.estado === 'dado-de-baja') {
+    estado = 'Dado de Baja';
+  } else if (a.estado === 'en-reparacion' || a.estado === 'inactivo') {
+    estado = 'En Reparación';
+  } else {
+    // Fallback: derivar desde estadoOperativo cuando estado es 'activo' o desconocido
+    const estadoOpMap: Record<string, 'Activo' | 'En Reparación' | 'Dado de Baja'> = {
+      disponible:         'Activo',
+      'en-prestamo':      'Activo',
+      'en-mantenimiento': 'En Reparación',
+      danado:             'Dado de Baja',
+    };
+    estado = estadoOpMap[a.estadoOperativo ?? 'disponible'] ?? 'Activo';
+  }
 
   return {
     id:                      a.id ?? '',
