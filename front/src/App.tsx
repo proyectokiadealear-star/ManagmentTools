@@ -10,14 +10,15 @@ import { AssetCatalog } from '@features/asset-management/AssetCatalog';
 import { WorkshopOverview } from '@features/asset-management/WorkshopOverview';
 import { Custody } from '@features/asset-management/Custody';
 import { Depreciation } from '@features/finance/Depreciation';
-import { DataQuality } from '@features/asset-management/DataQuality';
 import { MaintenancePlanning } from '@features/maintenance/MaintenancePlanning';
 import { RepairVsReplace } from '@features/finance/RepairVsReplace';
 import { ToolLoans } from '@features/tool-management/ToolLoans';
 import { ToolInspections } from '@features/tool-management/ToolInspections';
 import { ToolDevolution } from '@features/tool-management/ToolDevolution';
 import { MaterialConsumption } from '@features/consumables-safety/MaterialConsumption';
+import { InsumosCatalog } from '@features/consumables-safety/InsumosCatalog';
 import { PPEManagement } from '@features/consumables-safety/PPEManagement';
+import { EPPCatalog } from '@features/consumables-safety/EPPCatalog';
 import { ResponsabilidadesView } from '@features/responsabilidades/ResponsabilidadesView';
 import { UsuariosView } from '@features/usuarios/UsuariosView';
 import { CatalogosView } from '@features/catalogos/CatalogosView';
@@ -71,6 +72,8 @@ function MainLayout() {
           <Route path="/tool-inspections" element={<ToolInspections />} />
           <Route path="/tool-devolution" element={<ToolDevolution />} />
           <Route path="/material-consumption" element={<MaterialConsumption />} />
+          <Route path="/insumos-catalogo" element={<InsumosCatalog />} />
+          <Route path="/epp-catalogo" element={<EPPCatalog />} />
           <Route path="/ppe-management" element={<PPEManagement />} />
           <Route path="/responsabilidades" element={<ResponsabilidadesView />} />
           <Route path="/usuarios" element={<UsuariosView />} />
@@ -78,7 +81,6 @@ function MainLayout() {
           <Route path="/depreciation" element={<Depreciation />} />
           <Route path="/maintenance" element={<MaintenancePlanning />} />
           <Route path="/repair-vs-replace" element={<RepairVsReplace />} />
-          <Route path="/data-quality" element={<DataQuality />} />
         </Routes>
       </main>
     </div>

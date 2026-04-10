@@ -1,0 +1,30 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "movimientos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "activoId", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "entregas_epp",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tecnicoId", "order": "ASCENDING" },
+        { "fieldPath": "eppId", "order": "ASCENDING" },
+        { "fieldPath": "fechaEntrega", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "mantenimientos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "activoId", "order": "ASCENDING" },
+        { "fieldPath": "fechaRealizada", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

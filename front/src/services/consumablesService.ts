@@ -3,21 +3,66 @@ import { httpClient } from './httpClient';
 import {
   ConsumoInsumo,
   CategoriaInsumo,
-  EntregaEPP,
-  CategoriaEPP,
 } from '../data/mockData';
 
 // Re-export types so existing consumers keep working
-export type { ConsumoInsumo, CategoriaInsumo, EntregaEPP, CategoriaEPP };
+export type { ConsumoInsumo, CategoriaInsumo };
+
+// ─── EPP — Shared types ─────────────────────────────────────────────────────
+
+export interface CatalogoEPP {
+  id: string;
+  nombre: string;
+  tipo: string;                        // guantes-nitrilo, mascarilla-n95, calzado, overol, etc.
+  frecuenciaReposicionDias: number;    // 30, 90, 180, 365
+  costoUnitario: number;
+  stockActual?: number;
+}
+
+export interface EntregaEPP {
+  id: string;
+  eppId: string;
+  eppNombre: string;
+  eppTipo: string;
+  tecnicoId: string;
+  tecnicoNombre: string;
+  areaId: string;
+  cantidad: number;
+  loteProveedor?: string;
+  fechaEntrega: string;
+  proximaReposicion: string;
+  esExtraordinaria: boolean;
+  motivoExtraordinaria?: string;
+  firmaDigitalTecnico: boolean;
+  entregadoPor: string;
+  entregadoPorNombre: string;
+}
+
+export interface RegistrarEntregaPayload {
+  eppId: string;
+  tecnicoId: string;
+  tecnicoNombre: string;
+  areaId: string;
+  cantidad: number;
+  loteProveedor?: string;
+  esExtraordinaria: boolean;
+  motivoExtraordinaria?: string;
+  entregadoPor: string;
+  entregadoPorNombre: string;
+}
 
 // ─── Insumos — Catálogo ─────────────────────────────────────────────────────
 
 export interface CatalogoInsumo {
   id: string;
   nombre: string;
-  categoria: CategoriaInsumo;
-  unidad: string;
+  tipo: string;                   // lubricante, filtro, pintura, etc.
+  codigo: string;
+  unidadMedida: string;           // litros, unidades, rollos, metros, galones
   costoUnitario: number;
+  consumoPromedioPorOT: number;   // consumo histórico promedio por orden de trabajo
+  stockActual?: number;
+  stockMinimo?: number;
 }
 
 export async function getCatalogoInsumos(): Promise<CatalogoInsumo[]> {
@@ -31,13 +76,15 @@ export async function getCatalogoInsumos(): Promise<CatalogoInsumo[]> {
 
 export async function addCatalogoInsumo(
   data: Omit<CatalogoInsumo, 'id'>,
-): Promise<CatalogoInsumo | null> {
-  try {
-    return await httpClient.post<CatalogoInsumo>('/api/insumos/catalogo', data);
-  } catch {
-    console.warn('[consumablesService] addCatalogoInsumo — backend no disponible');
-    return null;
-  }
+): Promise<CatalogoInsumo> {
+  return httpClient.post<CatalogoInsumo>('/api/insumos/catalogo', data);
+}
+
+export async function updateCatalogoInsumo(
+  id: string,
+  data: Partial<Omit<CatalogoInsumo, 'id'>>,
+): Promise<CatalogoInsumo> {
+  return httpClient.patch<CatalogoInsumo>(`/api/insumos/catalogo/${encodeURIComponent(id)}`, data);
 }
 
 // ─── Insumos — Consumos ─────────────────────────────────────────────────────
@@ -112,12 +159,6 @@ export async function getAnomaliasInsumos(periodo?: string): Promise<AnomaliaIns
 
 // ─── EPP — Catálogo ─────────────────────────────────────────────────────────
 
-export interface CatalogoEPP {
-  id: string;
-  nombre: string;
-  categoria: CategoriaEPP;
-}
-
 export async function getCatalogoEPP(): Promise<CatalogoEPP[]> {
   try {
     return await httpClient.get<CatalogoEPP[]>('/api/epp/catalogo');
@@ -129,13 +170,15 @@ export async function getCatalogoEPP(): Promise<CatalogoEPP[]> {
 
 export async function addCatalogoEPP(
   data: Omit<CatalogoEPP, 'id'>,
-): Promise<CatalogoEPP | null> {
-  try {
-    return await httpClient.post<CatalogoEPP>('/api/epp/catalogo', data);
-  } catch {
-    console.warn('[consumablesService] addCatalogoEPP — backend no disponible');
-    return null;
-  }
+): Promise<CatalogoEPP> {
+  return httpClient.post<CatalogoEPP>('/api/epp/catalogo', data);
+}
+
+export async function updateCatalogoEPP(
+  id: string,
+  data: Partial<Omit<CatalogoEPP, 'id'>>,
+): Promise<CatalogoEPP> {
+  return httpClient.patch<CatalogoEPP>(`/api/epp/catalogo/${encodeURIComponent(id)}`, data);
 }
 
 // ─── EPP — Entregas ─────────────────────────────────────────────────────────
@@ -153,17 +196,6 @@ export async function getEntregasEPP(filters?: {
   return httpClient.get<EntregaEPP[]>(
     `/api/epp/entregas${qs ? `?${qs}` : ''}`,
   );
-}
-
-export async function getEntregasEPPByTecnico(tecnico: string): Promise<EntregaEPP[]> {
-  return httpClient.get<EntregaEPP[]>(
-    `/api/epp/entregas/tecnico/${encodeURIComponent(tecnico)}`,
-  );
-}
-
-export async function getEntregasEPPByCategoria(categoria: CategoriaEPP): Promise<EntregaEPP[]> {
-  const all = await httpClient.get<EntregaEPP[]>('/api/epp/entregas');
-  return all.filter((e) => e.categoria === categoria);
 }
 
 export async function getEntregasEPPPendientes(): Promise<EntregaEPP[]> {
@@ -190,7 +222,7 @@ export async function getCalendarioEntregasEPP(): Promise<CalendarioEntregaEPP[]
 }
 
 export async function createEntregaEPP(
-  data: Omit<EntregaEPP, 'id'>,
+  data: RegistrarEntregaPayload,
 ): Promise<EntregaEPP> {
   return httpClient.post<EntregaEPP>('/api/epp/entrega', data);
 }

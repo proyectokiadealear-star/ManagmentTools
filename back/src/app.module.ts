@@ -17,6 +17,7 @@ import { InsumosModule } from './insumos/insumos.module';
 import { EppModule } from './epp/epp.module';
 import { InspeccionesModule } from './inspecciones/inspecciones.module';
 import { CatalogosModule } from './catalogos/catalogos.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -43,6 +44,7 @@ import { AppService } from './app.service';
     InsumosModule,
     EppModule,
     InspeccionesModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { FirebaseService } from '../firebase/firebase.service';
 import { Firestore } from 'firebase-admin/firestore';
 import { CatalogoItem, CatalogoTipo } from './entities/catalogo-item.entity';
@@ -59,7 +59,16 @@ export class CatalogosService {
     const doc = await docRef.get();
     if (!doc.exists) throw new NotFoundException(`Catálogo item ${id} no encontrado`);
 
-    const updates = { ...dto, updatedAt: new Date().toISOString() };
+    // Filtrar campos undefined para evitar error de Firestore
+    const data = Object.fromEntries(
+      Object.entries(dto).filter(([_, v]) => v !== undefined),
+    );
+
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('No hay campos válidos para actualizar');
+    }
+
+    const updates = { ...data, updatedAt: new Date().toISOString() };
     await docRef.update(updates);
 
     return { id: doc.id, ...doc.data(), ...updates } as CatalogoItem;

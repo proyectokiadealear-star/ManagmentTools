@@ -6,7 +6,6 @@ import {
   PackageSearch,
   Users,
   TrendingDown,
-  ShieldAlert,
   Wrench,
   CalendarClock,
   Hammer,
@@ -80,7 +79,6 @@ const navigation: NavEntry[] = [
       { path: '/responsabilidades', label: 'Responsables', icon: UserCheck, roles: ['jefe'] },
       { path: '/depreciation', label: 'Finanzas / Depreciación', icon: TrendingDown, roles: ['jefe'] },
       { path: '/repair-vs-replace', label: 'Reparar vs. Reemplazar', icon: Hammer, roles: ['tecnico', 'jefe'] },
-      { path: '/data-quality', label: 'Calidad de Datos', icon: ShieldAlert, roles: ['jefe'] },
     ],
   },
 
@@ -115,7 +113,9 @@ const navigation: NavEntry[] = [
     icon: Beaker,
     roles: ['personal', 'tecnico', 'jefe'],
     items: [
+      { path: '/insumos-catalogo', label: 'Catálogo de Insumos', icon: FlaskConical, roles: ['tecnico', 'jefe'] },
       { path: '/material-consumption', label: 'Consumo de Insumos', icon: FlaskConical, roles: ['personal', 'tecnico', 'jefe'] },
+      { path: '/epp-catalogo', label: 'Catálogo de EPP', icon: HardHat, roles: ['tecnico', 'jefe'] },
       { path: '/ppe-management', label: 'Gestión de EPP', icon: HardHat, roles: ['tecnico', 'jefe'] },
     ],
   },
@@ -202,7 +202,7 @@ function SidebarGroup({ group, role, collapsed = false }: { group: NavGroup; rol
       <div title={group.label}>
         <button
           onClick={handleToggle}
-          className={`w-full flex items-center justify-center px-3 py-2.5 rounded-lg transition-all text-sm ${
+          className={`w-full flex items-center justify-center px-3 py-2.5 rounded-lg transition-[transform,background-color,color] duration-150 ease-out active:scale-[0.97] text-sm ${
             hasActiveChild
               ? 'text-white bg-slate-800/30'
               : 'hover:text-white hover:bg-slate-800/30'
@@ -216,7 +216,7 @@ function SidebarGroup({ group, role, collapsed = false }: { group: NavGroup; rol
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: 'easeInOut' }}
+              transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
               className="overflow-hidden"
             >
               <div className="mt-1 space-y-0.5">
@@ -236,7 +236,7 @@ function SidebarGroup({ group, role, collapsed = false }: { group: NavGroup; rol
       {/* Cabecera del grupo */}
       <button
         onClick={handleToggle}
-        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm ${
+        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-[transform,background-color,color] duration-150 ease-out active:scale-[0.97] text-sm ${
           hasActiveChild
             ? 'text-white bg-slate-800/30'
             : 'hover:text-white hover:bg-slate-800/30'
@@ -259,7 +259,7 @@ function SidebarGroup({ group, role, collapsed = false }: { group: NavGroup; rol
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
             className="overflow-hidden"
           >
             <div className="ml-3 pl-3 border-l border-slate-700/50 mt-1 space-y-0.5">
@@ -300,7 +300,7 @@ export function Sidebar({ collapsed = false, onToggle }: { collapsed?: boolean; 
   return (
     <motion.div
       animate={{ width: collapsed ? 64 : 256 }}
-      transition={{ duration: 0.2, ease: 'easeInOut' }}
+      transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
       className="bg-slate-900 h-screen flex flex-col text-slate-300 border-r border-slate-800 shrink-0 overflow-hidden"
     >
       {/* Logo + Toggle */}
@@ -308,7 +308,7 @@ export function Sidebar({ collapsed = false, onToggle }: { collapsed?: boolean; 
         {collapsed ? (
           <button
             onClick={onToggle}
-            className="bg-amber-500 p-2 rounded-lg text-slate-900 hover:bg-amber-400 transition-colors"
+            className="bg-amber-500 p-2 rounded-lg text-slate-900 hover:bg-amber-400 transition-[transform,background-color] duration-150 ease-out active:scale-[0.97]"
             title="Expandir menú"
           >
             <PanelLeftOpen size={22} />
@@ -326,7 +326,7 @@ export function Sidebar({ collapsed = false, onToggle }: { collapsed?: boolean; 
             </div>
             <button
               onClick={onToggle}
-              className="p-1.5 rounded-lg hover:bg-slate-800/50 transition-colors text-slate-400 hover:text-white shrink-0"
+              className="p-1.5 rounded-lg hover:bg-slate-800/50 transition-[transform,background-color,color] duration-150 ease-out active:scale-[0.97] text-slate-400 hover:text-white shrink-0"
               title="Colapsar menú"
             >
               <PanelLeftClose size={18} />
@@ -365,7 +365,7 @@ export function Sidebar({ collapsed = false, onToggle }: { collapsed?: boolean; 
         <button
           onClick={handleLogout}
           title={collapsed ? 'Cerrar Sesión' : undefined}
-          className={`w-full flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-lg hover:text-red-400 hover:bg-slate-800/30 transition-all text-sm`}
+          className={`w-full flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-lg hover:text-red-400 hover:bg-slate-800/30 transition-[transform,background-color,color] duration-150 ease-out active:scale-[0.97] text-sm`}
         >
           <LogOut size={18} />
           {!collapsed && <span className="font-medium">Cerrar Sesión</span>}

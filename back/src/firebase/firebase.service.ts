@@ -221,6 +221,8 @@ export class FirebaseService implements OnModuleInit, OnModuleDestroy {
         }),
         databaseURL,
       });
+      // Safety net: ignorar propiedades undefined en lugar de lanzar error
+      this.firebaseApp.firestore().settings({ ignoreUndefinedProperties: true });
       this.logger.log('Firebase inicializado con credenciales reales.');
     } else {
       this.isDemoMode = true;

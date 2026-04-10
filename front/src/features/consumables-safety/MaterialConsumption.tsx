@@ -4,8 +4,8 @@ import { useRole } from '@shared/context/AssetContext';
 import { computeStats } from '@shared/utils/stats';
 import { Pagination } from '@shared/components';
 import { usePagination } from '@shared/hooks/usePagination';
-import { getConsumos, createConsumo } from '../../services/consumablesService';
-import type { ConsumoInsumo, CategoriaInsumo } from '../../services/consumablesService';
+import { getConsumos, createConsumo, getCatalogoInsumos } from '../../services/consumablesService';
+import type { ConsumoInsumo, CategoriaInsumo, CatalogoInsumo } from '../../services/consumablesService';
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
@@ -13,15 +13,16 @@ export function MaterialConsumption() {
   const role = useRole();
   const [consumos, setConsumos] = useState<ConsumoInsumo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [catalogo, setCatalogo] = useState<CatalogoInsumo[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    getConsumos().then(data => {
-      if (!cancelled) {
-        setConsumos(data);
-        setLoading(false);
-      }
+    Promise.allSettled([getConsumos(), getCatalogoInsumos()]).then(([rConsumos, rCatalogo]) => {
+      if (cancelled) return;
+      if (rConsumos.status === 'fulfilled') setConsumos(rConsumos.value);
+      if (rCatalogo.status === 'fulfilled') setCatalogo(rCatalogo.value);
+      setLoading(false);
     });
     return () => { cancelled = true; };
   }, []);
@@ -31,13 +32,13 @@ export function MaterialConsumption() {
   const [showFormModal, setShowFormModal] = useState(false);
   const [form, setForm] = useState({
     ordenTrabajo: '',
-    insumo: '',
-    categoria: '' as CategoriaInsumo | '',
+    insumoId: '',
     cantidad: '',
-    unidad: 'litros',
-    costoUnitario: '',
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  // Insumo seleccionado del catálogo
+  const selectedInsumo = catalogo.find(i => i.id === form.insumoId) ?? null;
 
   // ── Derived values ───────────────────────────────────────────────────────
 
@@ -161,12 +162,9 @@ export function MaterialConsumption() {
   function validateForm(): boolean {
     const errors: Record<string, string> = {};
     if (!form.ordenTrabajo.trim()) errors.ordenTrabajo = 'Número de OT requerido';
-    if (!form.insumo.trim()) errors.insumo = 'Nombre del insumo requerido';
-    if (!form.categoria) errors.categoria = 'Seleccione una categoría';
+    if (!form.insumoId) errors.insumoId = 'Seleccione un insumo del catálogo';
     if (!form.cantidad || Number(form.cantidad) <= 0)
       errors.cantidad = 'Ingrese una cantidad mayor a 0';
-    if (!form.costoUnitario || Number(form.costoUnitario) <= 0)
-      errors.costoUnitario = 'Ingrese un costo unitario válido';
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -174,21 +172,20 @@ export function MaterialConsumption() {
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
-    if (!validateForm()) return;
+    if (!validateForm() || !selectedInsumo) return;
 
     const cantidad = Number(form.cantidad);
-    const costoUnitario = Number(form.costoUnitario);
-    const costoTotal = cantidad * costoUnitario;
+    const costoTotal = cantidad * selectedInsumo.costoUnitario;
 
     const payload: Omit<ConsumoInsumo, 'id'> = {
       ordenTrabajo: form.ordenTrabajo.trim(),
       tecnico: role === 'jefe' ? 'Jefe de Taller' : role === 'tecnico' ? 'Técnico' : 'Personal',
       fecha: new Date().toISOString().split('T')[0],
-      insumo: form.insumo.trim(),
-      categoria: form.categoria as CategoriaInsumo,
+      insumo: selectedInsumo.nombre,
+      categoria: selectedInsumo.tipo as CategoriaInsumo,
       cantidad,
-      unidad: form.unidad,
-      costoUnitario,
+      unidad: selectedInsumo.unidadMedida,
+      costoUnitario: selectedInsumo.costoUnitario,
       costoTotal,
     };
 
@@ -197,14 +194,7 @@ export function MaterialConsumption() {
       const created = await createConsumo(payload);
       setConsumos(prev => [...prev, created]);
       setShowFormModal(false);
-      setForm({
-        ordenTrabajo: '',
-        insumo: '',
-        categoria: '',
-        cantidad: '',
-        unidad: 'litros',
-        costoUnitario: '',
-      });
+      setForm({ ordenTrabajo: '', insumoId: '', cantidad: '' });
       setFormErrors({});
     } catch (err) {
       console.error('[MaterialConsumption] Error al guardar consumo:', err);
@@ -216,20 +206,12 @@ export function MaterialConsumption() {
   function handleCloseModal() {
     setShowFormModal(false);
     setFormErrors({});
-    setForm({
-      ordenTrabajo: '',
-      insumo: '',
-      categoria: '',
-      cantidad: '',
-      unidad: 'litros',
-      costoUnitario: '',
-    });
+    setForm({ ordenTrabajo: '', insumoId: '', cantidad: '' });
   }
 
-  const costoTotalPreview =
-    form.cantidad && form.costoUnitario
-      ? (Number(form.cantidad) * Number(form.costoUnitario)).toFixed(2)
-      : '—';
+  const costoTotalPreview = selectedInsumo && form.cantidad
+    ? (Number(form.cantidad) * selectedInsumo.costoUnitario).toFixed(2)
+    : '—';
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -513,6 +495,13 @@ export function MaterialConsumption() {
 
             {/* Modal body */}
             <div className="px-6 py-4 space-y-4">
+              {/* Advertencia si el catálogo está vacío */}
+              {catalogo.length === 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-700">
+                  No hay insumos registrados. Agregue insumos en <strong>Catálogo de Insumos</strong> antes de registrar consumos.
+                </div>
+              )}
+
               {/* OT */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -532,105 +521,56 @@ export function MaterialConsumption() {
                 )}
               </div>
 
-              {/* Insumo */}
+              {/* Insumo del catálogo */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Insumo <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={form.insumo}
-                  onChange={e => setForm(f => ({ ...f, insumo: e.target.value }))}
-                  placeholder="Ej. Aceite 5W-30"
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 ${
-                    formErrors.insumo ? 'border-red-400' : 'border-gray-300'
-                  }`}
-                />
-                {formErrors.insumo && (
-                  <p className="text-xs text-red-500 mt-1">{formErrors.insumo}</p>
-                )}
-              </div>
-
-              {/* Categoría */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Categoría <span className="text-red-500">*</span>
-                </label>
                 <select
-                  value={form.categoria}
-                  onChange={e =>
-                    setForm(f => ({ ...f, categoria: e.target.value as CategoriaInsumo | '' }))
-                  }
+                  value={form.insumoId}
+                  onChange={e => setForm(f => ({ ...f, insumoId: e.target.value }))}
                   className={`w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 ${
-                    formErrors.categoria ? 'border-red-400' : 'border-gray-300'
+                    formErrors.insumoId ? 'border-red-400' : 'border-gray-300'
                   }`}
                 >
-                  <option value="">Seleccionar categoría…</option>
-                  <option value="Lubricante">Lubricante</option>
-                  <option value="Filtro">Filtro</option>
-                  <option value="Refrigerante">Refrigerante</option>
-                  <option value="Frenos">Frenos</option>
-                  <option value="Eléctrico">Eléctrico</option>
-                  <option value="Otro">Otro</option>
+                  <option value="">Seleccionar insumo del catálogo…</option>
+                  {catalogo.map(i => (
+                    <option key={i.id} value={i.id}>
+                      {i.nombre} — {i.tipo} ({i.unidadMedida}) — ${i.costoUnitario.toFixed(2)}/{i.unidadMedida}
+                    </option>
+                  ))}
                 </select>
-                {formErrors.categoria && (
-                  <p className="text-xs text-red-500 mt-1">{formErrors.categoria}</p>
+                {formErrors.insumoId && (
+                  <p className="text-xs text-red-500 mt-1">{formErrors.insumoId}</p>
+                )}
+                {selectedInsumo && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Consumo promedio por OT: <strong>{selectedInsumo.consumoPromedioPorOT} {selectedInsumo.unidadMedida}</strong>
+                    {selectedInsumo.stockActual != null && (
+                      <> · Stock disponible: <strong>{selectedInsumo.stockActual} {selectedInsumo.unidadMedida}</strong></>
+                    )}
+                  </p>
                 )}
               </div>
 
-              {/* Cantidad + Unidad */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Cantidad <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={form.cantidad}
-                    onChange={e => setForm(f => ({ ...f, cantidad: e.target.value }))}
-                    placeholder="0.00"
-                    className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 ${
-                      formErrors.cantidad ? 'border-red-400' : 'border-gray-300'
-                    }`}
-                  />
-                  {formErrors.cantidad && (
-                    <p className="text-xs text-red-500 mt-1">{formErrors.cantidad}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Unidad</label>
-                  <select
-                    value={form.unidad}
-                    onChange={e => setForm(f => ({ ...f, unidad: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  >
-                    <option value="litros">litros</option>
-                    <option value="unidades">unidades</option>
-                    <option value="kg">kg</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Costo Unitario */}
+              {/* Cantidad */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Costo Unitario ($) <span className="text-red-500">*</span>
+                  Cantidad{selectedInsumo ? ` (${selectedInsumo.unidadMedida})` : ''} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
                   min="0.01"
                   step="0.01"
-                  value={form.costoUnitario}
-                  onChange={e => setForm(f => ({ ...f, costoUnitario: e.target.value }))}
+                  value={form.cantidad}
+                  onChange={e => setForm(f => ({ ...f, cantidad: e.target.value }))}
                   placeholder="0.00"
                   className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 ${
-                    formErrors.costoUnitario ? 'border-red-400' : 'border-gray-300'
+                    formErrors.cantidad ? 'border-red-400' : 'border-gray-300'
                   }`}
                 />
-                {formErrors.costoUnitario && (
-                  <p className="text-xs text-red-500 mt-1">{formErrors.costoUnitario}</p>
+                {formErrors.cantidad && (
+                  <p className="text-xs text-red-500 mt-1">{formErrors.cantidad}</p>
                 )}
               </div>
 
