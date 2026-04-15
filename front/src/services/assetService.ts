@@ -31,6 +31,7 @@ export interface ActivoAPI {
   bahiaId?: string;
   rackId?: string;
   cajaId?: string;
+  sede?: string;
   responsable?: string;
   custodio?: string;
   estado: string;
@@ -52,6 +53,7 @@ export interface SearchParams {
   estado?: string;
   estadoOperativo?: string;
   areaId?: string;
+  sede?: string;
 }
 
 export interface EstadisticasResponse {
@@ -142,6 +144,7 @@ export function mapActivoToAsset(a: ActivoAPI): Asset {
     bahia:                   a.bahiaId ?? undefined,
     rack:                    a.rackId ?? undefined,
     caja:                    a.cajaId ?? undefined,
+    sede:                    a.sede ?? undefined,
     responsable:             a.responsable ?? '',
     custodio:                a.custodio ?? '',
     encargado:               a.encargado ?? a.custodio ?? '',
@@ -182,6 +185,7 @@ function mapAssetToDto(data: Partial<Asset>): Record<string, unknown> {
     'codigo', 'tipo', 'marca', 'modelo', 'serial', 'placa',
     'proveedor', 'factura', 'fechaCompra', 'valor', 'vidaUtil',
     'capacidadEspecificacion', 'periodicidad', 'itemProveedor',
+    'sede',
     'responsable', 'custodio', 'encargado', 'comentario',
     'observacion', 'fechaUltimoMantenimiento', 'imagenUrl',
   ];

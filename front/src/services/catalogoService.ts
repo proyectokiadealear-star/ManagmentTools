@@ -2,6 +2,7 @@
 import { httpClient } from './httpClient';
 
 export type CatalogoTipo =
+  | 'sede'
   | 'marca'
   | 'modelo'
   | 'tipo-activo'

@@ -16,6 +16,11 @@ export class TransferirActivoDto {
   @IsString()
   cajaId?: string;
 
+  @IsOptional()
+  @IsString()
+  // Campo legacy/informativo: la sede final de transferencia se deriva desde areaId.
+  sede?: string;
+
   @IsString()
   motivo: string;
 }

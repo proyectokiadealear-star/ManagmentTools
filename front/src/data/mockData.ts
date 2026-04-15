@@ -26,6 +26,7 @@ export interface Asset {
   bahia?: string;
   rack?: string;
   caja?: string;
+  sede?: string;
   responsable: string;
   custodio: string;
   encargado: string;

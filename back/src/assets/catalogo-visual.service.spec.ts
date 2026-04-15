@@ -3,9 +3,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AssetsService } from './assets.service';
 import { FirebaseService } from '../firebase/firebase.service';
 import { NotFoundException } from '@nestjs/common';
+import { LocationsService } from '../locations/locations.service';
 
 const mockFirebaseService = {
   getFirestore: jest.fn(),
+};
+
+const mockLocationsService = {
+  findAreaById: jest.fn(),
 };
 
 // Factory para construir un mock de activo completo
@@ -70,25 +75,32 @@ describe('AssetsService — Catálogo Visual', () => {
       providers: [
         AssetsService,
         { provide: FirebaseService, useValue: mockFirebaseService },
+        { provide: LocationsService, useValue: mockLocationsService },
       ],
     }).compile();
 
     service = module.get<AssetsService>(AssetsService);
     jest.clearAllMocks();
+    mockLocationsService.findAreaById.mockResolvedValue({ id: 'area-default', sede: 'SURMOTOR' });
   });
 
   // ─── 6.1 search() ─────────────────────────────────────────────────────────
 
   describe('search()', () => {
     const activos = [
-      buildActivo({ id: '1', nombre: 'Llave de Torque Digital', tipo: 'Herramienta', estadoOperativo: 'disponible', areaId: 'area-mecanica' }),
-      buildActivo({ id: '2', nombre: 'Multímetro Digital', tipo: 'Herramienta', estadoOperativo: 'en-prestamo', areaId: 'area-mecanica' }),
-      buildActivo({ id: '3', nombre: 'Elevador Hidráulico', tipo: 'Elevador', estadoOperativo: 'disponible', capacidad: '3.5 toneladas', areaId: 'area-mecanica' }),
-      buildActivo({ id: '4', nombre: 'Compresor Industrial', tipo: 'Compresor', estadoOperativo: 'en-mantenimiento', areaId: 'area-pintura' }),
+      buildActivo({ id: '1', nombre: 'Llave de Torque Digital', tipo: 'Herramienta', estadoOperativo: 'disponible', areaId: 'area-mecanica', sede: 'SURMOTOR' }),
+      buildActivo({ id: '2', nombre: 'Multímetro Digital', tipo: 'Herramienta', estadoOperativo: 'en-prestamo', areaId: 'area-mecanica', sede: 'SURMOTOR' }),
+      buildActivo({ id: '3', nombre: 'Elevador Hidráulico', tipo: 'Elevador', estadoOperativo: 'disponible', capacidad: '3.5 toneladas', areaId: 'area-mecanica', sede: 'SURMOTOR' }),
+      buildActivo({ id: '4', nombre: 'Compresor Industrial', tipo: 'Compresor', estadoOperativo: 'en-mantenimiento', areaId: 'area-pintura', sede: 'SHYRIS' }),
     ];
 
     beforeEach(() => {
       mockFirebaseService.getFirestore.mockReturnValue(makeMockFirestore(activos));
+      mockLocationsService.findAreaById.mockImplementation(async (id: string) => {
+        if (id === 'area-mecanica') return { id, sede: 'SURMOTOR' };
+        if (id === 'area-pintura') return { id, sede: 'SHYRIS' };
+        return { id, sede: 'SURMOTOR' };
+      });
     });
 
     it('debe retornar todos los activos cuando no hay filtros', async () => {
@@ -140,6 +152,23 @@ describe('AssetsService — Catálogo Visual', () => {
     it('debe buscar por placa', async () => {
       const result = await service.search({ q: 'PL-001' }, {});
       expect(result.length).toBeGreaterThan(0);
+    });
+
+    it('debe filtrar solo por sede', async () => {
+      const result = await service.search({}, { sede: 'surmotor' } as any);
+      expect(result).toHaveLength(3);
+      result.forEach(a => expect((a as any).sede).toBe('SURMOTOR'));
+    });
+
+    it('debe filtrar por combinación sede + area válida', async () => {
+      const result = await service.search({}, { sede: 'SURMOTOR', areaId: 'area-mecanica' } as any);
+      expect(result).toHaveLength(3);
+      result.forEach(a => expect(a.areaId).toBe('area-mecanica'));
+    });
+
+    it('debe retornar vacío en combinación sede + area incompatible', async () => {
+      const result = await service.search({}, { sede: 'SURMOTOR', areaId: 'area-pintura' } as any);
+      expect(result).toEqual([]);
     });
   });
 

@@ -60,6 +60,7 @@ export function AssetFormModal({
   const [marcas, setMarcas] = useState<CatalogoItem[]>([]);
   const [modelos, setModelos] = useState<CatalogoItem[]>([]);
   const [proveedores, setProveedores] = useState<CatalogoItem[]>([]);
+  const [sedesCatalogo, setSedesCatalogo] = useState<string[]>([]);
 
   // ── Ubicación dinámica ──
   const [areas, setAreas] = useState<AreaAPI[]>([]);
@@ -70,11 +71,42 @@ export function AssetFormModal({
   // ── Usuarios activos (para custodio) ──
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
 
+  const normalizarSede = React.useCallback((value?: string): string | undefined => {
+    if (!value) return undefined;
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    return trimmed
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, '_')
+      .toUpperCase();
+  }, []);
+
+  const sedesDisponibles = React.useMemo(
+    () => Array.from(
+      new Set(
+        sedesCatalogo
+          .map(s => normalizarSede(s))
+          .filter((s): s is string => !!s),
+      ),
+    ).sort(),
+    [sedesCatalogo, normalizarSede],
+  );
+
   // Cargar catálogos y usuarios al montar
   useEffect(() => {
     getCatalogos('tipo-activo').then(setTiposActivo).catch(() => {});
     getCatalogos('marca').then(setMarcas).catch(() => {});
     getCatalogos('proveedor').then(setProveedores).catch(() => {});
+    getCatalogos('sede')
+      .then(items => {
+        const activas = items
+          .filter(item => item.activo)
+          .map(item => item.nombre)
+          .filter(Boolean);
+        setSedesCatalogo(activas);
+      })
+      .catch(() => setSedesCatalogo([]));
     getAreas().then(setAreas).catch(() => {});
     getUsuarios().then(u => setUsuarios(u.filter(x => x.activo))).catch(() => {});
   }, []);
@@ -96,6 +128,17 @@ export function AssetFormModal({
     getBahias(formData.area).then(setBahias).catch(() => {});
     setFormData(prev => ({ ...prev, bahia: '', rack: '', caja: '' }));
   }, [formData.area]);
+
+  // Mantener coherencia sede↔área: si el área cambia, sincroniza sede con la sede del área.
+  useEffect(() => {
+    if (!formData.area) {
+      return;
+    }
+    const areaSeleccionada = areas.find(a => a.id === formData.area);
+    const sedeArea = normalizarSede(areaSeleccionada?.sede);
+    if (!sedeArea || sedeArea === normalizarSede(formData.sede)) return;
+    setFormData(prev => ({ ...prev, sede: sedeArea }));
+  }, [formData.area, formData.sede, areas, normalizarSede]);
 
   // Cargar racks cuando cambia la bahía
   useEffect(() => {
@@ -455,8 +498,39 @@ export function AssetFormModal({
                       onChange={handleChange}
                       className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500">
                       <option value="">— Seleccionar área —</option>
-                      {areas.map(a => (
+                      {areas
+                        .filter(a => !formData.sede || normalizarSede(a.sede) === normalizarSede(formData.sede))
+                        .map(a => (
                         <option key={a.id} value={a.id}>{a.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Sede
+                    </label>
+                    <select
+                      name="sede"
+                      value={formData.sede ?? ''}
+                      onChange={e => {
+                        const nextSede = e.target.value || undefined;
+                        const areaSeleccionada = areas.find(a => a.id === formData.area);
+                        const areaIncompatible =
+                          !!nextSede &&
+                          !!areaSeleccionada &&
+                          normalizarSede(areaSeleccionada.sede) !== normalizarSede(nextSede);
+
+                        setFormData(prev => ({
+                          ...prev,
+                          sede: nextSede,
+                          ...(areaIncompatible ? { area: undefined, bahia: '', rack: '', caja: '' } : {}),
+                        }));
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500"
+                    >
+                      <option value="">— Seleccionar sede —</option>
+                      {sedesDisponibles.map(s => (
+                        <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
                       ))}
                     </select>
                   </div>

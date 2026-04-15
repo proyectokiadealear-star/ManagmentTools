@@ -22,6 +22,7 @@ export interface Activo {
   bahiaId?: string;
   rackId?: string;
   cajaId?: string;
+  sede: string;                    // Obligatoria: derivada de areaId -> areas.sede (backend source of truth)
   responsable?: string;          // Responsible role (e.g. "Jefe de Taller")
   custodio?: string;             // Custodian person name
   estado: 'activo' | 'inactivo' | 'en-reparacion' | 'dado-de-baja';

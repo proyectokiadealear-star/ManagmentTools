@@ -1,4 +1,5 @@
 export type CatalogoTipo =
+  | 'sede'
   | 'marca'
   | 'modelo'
   | 'tipo-activo'

@@ -5,6 +5,14 @@ import { CreateActivoDto } from './create-activo.dto';
 
 export class UpdateActivoDto extends PartialType(CreateActivoDto) {
   @ApiPropertyOptional({
+    example: 'SURMOTOR',
+    description: 'Sede opcional legacy/informativa. Si cambia areaId, el backend recalcula y persiste la sede derivada.',
+  })
+  @IsOptional()
+  @IsString()
+  sede?: string;
+
+  @ApiPropertyOptional({
     enum: ['disponible', 'en-prestamo', 'en-mantenimiento', 'danado'],
     example: 'disponible',
     description: 'Estado operativo del activo',

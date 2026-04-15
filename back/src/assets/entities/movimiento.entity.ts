@@ -7,6 +7,7 @@ export interface Ubicacion {
   rackNombre?: string;
   cajaId?: string;
   cajaNumero?: string;
+  sede?: string;
 }
 
 export interface Movimiento {

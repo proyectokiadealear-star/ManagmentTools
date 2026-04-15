@@ -1,171 +1,278 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { AssetsService } from './assets.service';
 import { FirebaseService } from '../firebase/firebase.service';
-import { NotFoundException, ConflictException } from '@nestjs/common';
+import { LocationsService } from '../locations/locations.service';
 
-const mockFirebaseService = {
-  getFirestore: jest.fn(),
-};
-
-const mockFirestore = {
-  collection: jest.fn(() => ({
-    doc: jest.fn(() => ({
-      get: jest.fn(),
-      set: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-    })),
-    add: jest.fn(),
-    where: jest.fn(() => ({
-      limit: jest.fn(() => ({
-        get: jest.fn(),
-      })),
-      orderBy: jest.fn(() => ({
-        get: jest.fn(),
-      })),
-      get: jest.fn(),
-    })),
-    get: jest.fn(),
-  })),
-};
-
-describe('AssetsService', () => {
+describe('AssetsService — sede derivada y filtros', () => {
   let service: AssetsService;
+
+  const activosAdd = jest.fn();
+  const activosDocGet = jest.fn();
+  const activosDocUpdate = jest.fn();
+  const movimientosAdd = jest.fn();
+
+  const mockFirestore = {
+    collection: jest.fn((name: string) => {
+      if (name === 'activos') {
+        return {
+          add: activosAdd,
+          doc: jest.fn(() => ({
+            get: activosDocGet,
+            update: activosDocUpdate,
+          })),
+          get: jest.fn().mockResolvedValue({ docs: [] }),
+          where: jest.fn(() => ({
+            where: jest.fn(() => ({
+              limit: jest.fn(() => ({ get: jest.fn().mockResolvedValue({ empty: true }) })),
+            })),
+            limit: jest.fn(() => ({ get: jest.fn().mockResolvedValue({ empty: true }) })),
+            orderBy: jest.fn(() => ({ get: jest.fn().mockResolvedValue({ docs: [] }) })),
+            get: jest.fn().mockResolvedValue({ docs: [] }),
+          })),
+        };
+      }
+
+      if (name === 'movimientos') {
+        return {
+          add: movimientosAdd,
+          where: jest.fn(() => ({
+            orderBy: jest.fn(() => ({ get: jest.fn().mockResolvedValue({ docs: [] }) })),
+          })),
+        };
+      }
+
+      if (name === 'programacion_mantenimiento') {
+        return {
+          add: jest.fn(),
+          where: jest.fn(() => ({
+            where: jest.fn(() => ({
+              limit: jest.fn(() => ({ get: jest.fn().mockResolvedValue({ empty: true }) })),
+            })),
+          })),
+        };
+      }
+
+      throw new Error(`Unexpected collection: ${name}`);
+    }),
+  };
+
+  const mockFirebaseService = {
+    getFirestore: jest.fn(() => mockFirestore),
+  };
+
+  const mockLocationsService = {
+    findAreaById: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AssetsService,
         { provide: FirebaseService, useValue: mockFirebaseService },
+        { provide: LocationsService, useValue: mockLocationsService },
       ],
     }).compile();
 
     service = module.get<AssetsService>(AssetsService);
-    mockFirebaseService.getFirestore.mockReturnValue(mockFirestore);
     jest.clearAllMocks();
+    activosAdd.mockResolvedValue({ id: 'new-asset-id' });
+    movimientosAdd.mockResolvedValue({ id: 'mov-1' });
   });
 
-  it('should be defined', () => {
+  it('debe estar definido', () => {
     expect(service).toBeDefined();
   });
 
-  describe('findAll', () => {
-    it('should return an array of activos', async () => {
-      const mockActivos = [
-        { id: '1', nombre: 'Activo 1', tipo: 'Equipo' },
-        { id: '2', nombre: 'Activo 2', tipo: 'Herramienta' },
-      ];
-      
-      mockFirestore.collection.mockReturnValue({
-        get: jest.fn().mockResolvedValue({
-          docs: mockActivos.map(a => ({ id: a.id, data: () => a })),
+  describe('derivación obligatoria de sede', () => {
+    it('create: persiste sede derivada desde areaId ignorando sede enviada', async () => {
+      mockLocationsService.findAreaById.mockResolvedValue({
+        id: 'area-norte',
+        sede: 'Sede Norte',
+      });
+
+      const result = await service.create(
+        {
+          nombre: 'Scanner',
+          tipo: 'Equipo',
+          areaId: 'area-norte',
+          sede: 'Sede Sur',
+        } as any,
+        'user-1',
+      );
+
+      expect(mockLocationsService.findAreaById).toHaveBeenCalledWith('area-norte');
+      expect(activosAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          areaId: 'area-norte',
+          sede: 'SEDE_NORTE',
         }),
+      );
+      expect(result.sede).toBe('SEDE_NORTE');
+    });
+
+    it('update: recalcula sede cuando cambia areaId', async () => {
+      jest.spyOn(service, 'findOne').mockResolvedValue({
+        id: 'A1',
+        nombre: 'Activo',
+        tipo: 'Equipo',
+        areaId: 'area-origen',
+        sede: 'SURMOTOR',
+        estado: 'activo',
+        estadoOperativo: 'disponible',
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
       } as any);
 
-      const result = await service.findAll();
-      expect(result).toHaveLength(2);
-      expect(mockFirestore.collection).toHaveBeenCalledWith('activos');
-    });
-  });
+      mockLocationsService.findAreaById.mockResolvedValue({
+        id: 'area-destino',
+        sede: 'Granda Centeno',
+      });
 
-  describe('findOne', () => {
-    it('should return a single activo', async () => {
-      const mockActivo = { id: '1', nombre: 'Activo 1', tipo: 'Equipo' };
-      
-      mockFirestore.collection.mockReturnValue({
-        doc: jest.fn(() => ({
-          get: jest.fn().mockResolvedValue({
-            exists: true,
-            data: () => mockActivo,
+      const updated = await service.update('A1', { areaId: 'area-destino' } as any);
+
+      expect(mockLocationsService.findAreaById).toHaveBeenCalledWith('area-destino');
+      expect(activosDocUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          areaId: 'area-destino',
+          sede: 'GRANDA_CENTENO',
+        }),
+      );
+      expect(updated.sede).toBe('GRANDA_CENTENO');
+    });
+
+    it('transferir: deriva movimiento.hasta.sede y sede final del activo desde area destino', async () => {
+      jest.spyOn(service, 'findOne').mockResolvedValue({
+        id: 'A1',
+        nombre: 'Activo',
+        areaId: 'area-origen',
+        sede: 'SURMOTOR',
+      } as any);
+
+      mockLocationsService.findAreaById.mockResolvedValue({
+        id: 'area-sur',
+        sede: 'Shyris',
+      });
+
+      const updateSpy = jest
+        .spyOn(service, 'update')
+        .mockResolvedValue({ id: 'A1', areaId: 'area-sur', sede: 'SHYRIS' } as any);
+
+      await service.transferir(
+        'A1',
+        { areaId: 'area-sur', motivo: 'Reasignación interna', sede: 'SURMOTOR' } as any,
+        'user-1',
+        'Usuario Test',
+      );
+
+      expect(movimientosAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hasta: expect.objectContaining({
+            areaId: 'area-sur',
+            sede: 'SHYRIS',
           }),
-        })),
-      } as any);
+        }),
+      );
 
-      const result = await service.findOne('1');
-      expect(result).toEqual(mockActivo);
-    });
-
-    it('should throw NotFoundException if activo not found', async () => {
-      mockFirestore.collection.mockReturnValue({
-        doc: jest.fn(() => ({
-          get: jest.fn().mockResolvedValue({ exists: false }),
-        })),
-      } as any);
-
-      await expect(service.findOne('999')).rejects.toThrow(NotFoundException);
+      expect(updateSpy).toHaveBeenCalledWith(
+        'A1',
+        expect.objectContaining({
+          areaId: 'area-sur',
+        }),
+      );
     });
   });
 
-  describe('create', () => {
-    it('should create a new activo', async () => {
-      const createDto = {
-        nombre: 'Nuevo Activo',
-        tipo: 'Equipo',
-        areaId: 'area-1',
-        bahiaId: 'bahia-1',
-        rackId: 'rack-1',
-      };
+  describe('rechazo de areaId inexistente sin escrituras parciales', () => {
+    it('create: lanza error y no escribe en activos', async () => {
+      mockLocationsService.findAreaById.mockRejectedValue(
+        new NotFoundException('Área missing no encontrada'),
+      );
 
-      mockFirestore.collection.mockReturnValue({
-        where: jest.fn(() => ({
-          limit: jest.fn(() => ({
-            get: jest.fn().mockResolvedValue({ empty: true }),
-          })),
-        })),
-        add: jest.fn().mockResolvedValue({ id: 'new-id' }),
-      } as any);
+      await expect(
+        service.create({ nombre: 'Activo', tipo: 'Equipo', areaId: 'missing' } as any, 'u1'),
+      ).rejects.toThrow(NotFoundException);
 
-      const result = await service.create(createDto, 'user-1');
-      expect(result.nombre).toBe('Nuevo Activo');
-      expect(result.usuarioId).toBe('user-1');
+      expect(activosAdd).not.toHaveBeenCalled();
     });
 
-    it('should throw ConflictException if location occupied', async () => {
-      const createDto = {
-        nombre: 'Nuevo Activo',
-        tipo: 'Equipo',
-        areaId: 'area-1',
-        bahiaId: 'bahia-1',
-        rackId: 'rack-1',
-      };
-
-      mockFirestore.collection.mockReturnValue({
-        where: jest.fn(() => ({
-          limit: jest.fn(() => ({
-            get: jest.fn().mockResolvedValue({ empty: false, docs: [{ id: 'existing' }] }),
-          })),
-        })),
+    it('update: lanza error y no escribe en activos', async () => {
+      jest.spyOn(service, 'findOne').mockResolvedValue({
+        id: 'A1',
+        areaId: 'area-old',
+        estado: 'activo',
+        estadoOperativo: 'disponible',
       } as any);
 
-      await expect(service.create(createDto, 'user-1')).rejects.toThrow(ConflictException);
+      mockLocationsService.findAreaById.mockRejectedValue(
+        new NotFoundException('Área missing no encontrada'),
+      );
+
+      await expect(service.update('A1', { areaId: 'missing' } as any)).rejects.toThrow(
+        NotFoundException,
+      );
+
+      expect(activosDocUpdate).not.toHaveBeenCalled();
+    });
+
+    it('transferir: lanza error y no registra movimiento ni actualización', async () => {
+      jest.spyOn(service, 'findOne').mockResolvedValue({
+        id: 'A1',
+        nombre: 'Activo',
+        areaId: 'area-old',
+      } as any);
+
+      mockLocationsService.findAreaById.mockRejectedValue(
+        new NotFoundException('Área missing no encontrada'),
+      );
+
+      const updateSpy = jest.spyOn(service, 'update');
+
+      await expect(
+        service.transferir('A1', { areaId: 'missing', motivo: 'x' } as any, 'u1'),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(movimientosAdd).not.toHaveBeenCalled();
+      expect(updateSpy).not.toHaveBeenCalled();
     });
   });
 
-  describe('validarUbicacionOcupada', () => {
-    it('should return true if location is occupied', async () => {
-      mockFirestore.collection.mockReturnValue({
-        where: jest.fn(() => ({
-          limit: jest.fn(() => ({
-            get: jest.fn().mockResolvedValue({ empty: false }),
-          })),
-        })),
-      } as any);
+  describe('filtros sede + area deterministas', () => {
+    const activosFixture = [
+      { id: '1', areaId: 'area-norte-1', sede: 'SEDE_NORTE', nombre: 'A', tipo: 'T' },
+      { id: '2', areaId: 'area-norte-2', sede: 'sede norte', nombre: 'B', tipo: 'T' },
+      { id: '3', areaId: 'area-sur-1', sede: 'SEDE_SUR', nombre: 'C', tipo: 'T' },
+    ];
 
-      const result = await service.validarUbicacionOcupada('area-1', 'bahia-1', 'rack-1');
-      expect(result).toBe(true);
+    beforeEach(() => {
+      jest.spyOn(service, 'findAll').mockResolvedValue(activosFixture as any);
     });
 
-    it('should return false if location is free', async () => {
-      mockFirestore.collection.mockReturnValue({
-        where: jest.fn(() => ({
-          limit: jest.fn(() => ({
-            get: jest.fn().mockResolvedValue({ empty: true }),
-          })),
-        })),
-      } as any);
+    it('filtro solo por sede retorna únicamente esa sede', async () => {
+      const result = await service.search({}, { sede: 'Sede Norte' } as any);
+      expect(result.map(a => a.id)).toEqual(['1', '2']);
+    });
 
-      const result = await service.validarUbicacionOcupada('area-1', 'bahia-1', 'rack-1');
-      expect(result).toBe(false);
+    it('filtro combinado sede+area coherente retorna coincidencias', async () => {
+      mockLocationsService.findAreaById.mockResolvedValue({ id: 'area-norte-1', sede: 'SEDE_NORTE' });
+
+      const result = await service.search(
+        {},
+        { sede: 'Sede Norte', areaId: 'area-norte-1' } as any,
+      );
+
+      expect(result.map(a => a.id)).toEqual(['1']);
+    });
+
+    it('combinación inválida sede+area retorna vacío de forma determinista', async () => {
+      mockLocationsService.findAreaById.mockResolvedValue({ id: 'area-sur-1', sede: 'SEDE_SUR' });
+
+      const result = await service.search(
+        {},
+        { sede: 'Sede Norte', areaId: 'area-sur-1' } as any,
+      );
+
+      expect(result).toEqual([]);
     });
   });
 });

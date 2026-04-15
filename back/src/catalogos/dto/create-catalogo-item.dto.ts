@@ -3,6 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 
 const CATALOGO_TIPOS = [
+  'sede',
   'marca',
   'modelo',
   'tipo-activo',

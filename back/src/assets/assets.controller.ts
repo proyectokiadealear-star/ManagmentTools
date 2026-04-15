@@ -55,6 +55,7 @@ export class AssetsController {
   @ApiQuery({ name: 'estado', required: false, description: 'Filtrar por estado (activo, en-reparacion, etc.)' })
   @ApiQuery({ name: 'estadoOperativo', required: false, description: 'Filtrar por estado operativo (disponible, en-prestamo, etc.)' })
   @ApiQuery({ name: 'areaId', required: false, description: 'Filtrar por área' })
+  @ApiQuery({ name: 'sede', required: false, description: 'Filtrar por sede (ej: SURMOTOR, GRANDA CENTENO)' })
   @ApiResponse({ status: 200, description: 'Lista de activos que coinciden con los filtros' })
   buscar(
     @Query() buscarDto: BuscarActivoDto,

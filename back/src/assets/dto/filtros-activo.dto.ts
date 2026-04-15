@@ -20,4 +20,8 @@ export class FiltrosActivoDto {
   @IsOptional()
   @IsString()
   areaId?: string;
+
+  @IsOptional()
+  @IsString()
+  sede?: string;
 }

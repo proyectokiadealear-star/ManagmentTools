@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   Plus, Pencil, Trash2, X, Save, Loader2,
   Tag, Truck, Boxes, Wrench, AlertTriangle,
-  Activity, Settings, ShieldCheck, Package, HardHat, FileText, Gavel,
+  Activity, Settings, ShieldCheck, Package, HardHat, FileText, Gavel, Building2,
 } from 'lucide-react';
 import {
   getCatalogos,
@@ -30,6 +30,7 @@ function sanitize(raw: string): string {
 /* ─────────────── tabs ─────────────── */
 
 type Tab =
+  | 'sede'
   | 'tipo-activo'
   | 'marca'
   | 'proveedor'
@@ -45,6 +46,7 @@ type Tab =
   | 'ubicaciones';
 
 const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
+  { key: 'sede',               label: 'Sedes',               icon: Building2 },
   { key: 'tipo-activo',        label: 'Tipos de Activo',     icon: Tag },
   { key: 'marca',              label: 'Marcas y Modelos',    icon: Boxes },
   { key: 'proveedor',          label: 'Proveedores',         icon: Truck },

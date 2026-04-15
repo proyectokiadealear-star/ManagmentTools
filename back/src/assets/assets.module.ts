@@ -3,8 +3,10 @@ import { AssetsService } from './assets.service';
 import { AssetsController } from './assets.controller';
 import { StorageService } from './storage.service';
 import { R2StorageService } from './r2-storage.service';
+import { LocationsModule } from '../locations/locations.module';
 
 @Module({
+  imports: [LocationsModule],
   controllers: [AssetsController],
   providers: [AssetsService, R2StorageService, StorageService],
   exports: [AssetsService, StorageService, R2StorageService],

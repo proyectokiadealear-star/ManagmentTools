@@ -94,6 +94,14 @@ export class CreateActivoDto {
   @IsString()
   areaId: string;
 
+  @ApiPropertyOptional({
+    example: 'SURMOTOR',
+    description: 'Sede opcional legacy/informativa. El backend deriva y persiste la sede final desde areaId.',
+  })
+  @IsOptional()
+  @IsString()
+  sede?: string;
+
   @ApiPropertyOptional({ example: 'bahia-1', description: 'ID de la bahía' })
   @IsOptional()
   @IsString()

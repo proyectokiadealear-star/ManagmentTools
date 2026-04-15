@@ -9,6 +9,7 @@ import { AssetFilterPanel } from './AssetFilterPanel';
 import { AssetDetailModal } from './AssetDetailModal';
 import { AvailabilityChecker } from './AvailabilityChecker';
 import { SearchParams, getAreas, AreaAPI } from '../../services/assetService';
+import { getCatalogos } from '../../services/catalogoService';
 import { useLocationNames } from '@shared/hooks/useLocationNames';
 
 export const AssetCatalog: React.FC = () => {
@@ -16,8 +17,20 @@ export const AssetCatalog: React.FC = () => {
   const [filtros, setFiltros] = useState<SearchParams>({});
   const [query, setQuery] = useState('');
   const [areas, setAreas] = useState<AreaAPI[]>([]);
+  const [sedesCatalogo, setSedesCatalogo] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [loading] = useState(false);
+
+  const normalizarSede = useCallback((value?: string) => {
+    if (!value) return undefined;
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    return trimmed
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, '_')
+      .toUpperCase();
+  }, []);
 
   // Modal state
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
@@ -28,6 +41,20 @@ export const AssetCatalog: React.FC = () => {
   // Cargar áreas para el filtro
   useEffect(() => {
     getAreas().then(setAreas).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    getCatalogos('sede')
+      .then(items => {
+        const activas = items
+          .filter(item => item.activo)
+          .map(item => item.nombre)
+          .filter(Boolean);
+        setSedesCatalogo(activas);
+      })
+      .catch(() => {
+        setSedesCatalogo([]);
+      });
   }, []);
 
   // Tipos únicos disponibles en los assets cargados
@@ -66,12 +93,23 @@ export const AssetCatalog: React.FC = () => {
       resultado = resultado.filter(a => (a as any).estadoOperativo === filtros.estadoOperativo);
     }
 
-    // Filtro por área (nombre)
+    // Filtro por sede
+    if (filtros.sede) {
+      const sedeFiltro = normalizarSede(filtros.sede);
+      resultado = resultado.filter(a => normalizarSede((a as any).sede) === sedeFiltro);
+    }
+
+    // Filtro por área (nombre) + coherencia con sede
     if (filtros.areaId) {
-      const areaNombre = areas.find(ar => ar.id === filtros.areaId)?.nombre;
-      if (areaNombre) {
+      const areaSeleccionada = areas.find(ar => ar.id === filtros.areaId);
+      const areaNombre = areaSeleccionada?.nombre;
+      const areaSede = normalizarSede(areaSeleccionada?.sede);
+
+      if (filtros.sede && areaSede && areaSede !== normalizarSede(filtros.sede)) {
+        resultado = [];
+      } else if (areaNombre) {
         resultado = resultado.filter(a =>
-          a.area?.toLowerCase().includes(areaNombre.toLowerCase()),
+          a.area === filtros.areaId || a.area?.toLowerCase().includes(areaNombre.toLowerCase()),
         );
       }
     }
@@ -84,7 +122,7 @@ export const AssetCatalog: React.FC = () => {
     }
 
     return resultado;
-  }, [assets, query, filtros, areas]);
+  }, [assets, query, filtros, areas, normalizarSede]);
 
   const handleView = useCallback((asset: Asset) => {
     setSelectedAsset(asset);
@@ -147,6 +185,7 @@ export const AssetCatalog: React.FC = () => {
         <AssetFilterPanel
           filtros={filtros}
           areas={areas}
+          sedesCatalogo={sedesCatalogo}
           tiposDisponibles={tiposDisponibles}
           onChange={setFiltros}
           onReset={handleResetFiltros}

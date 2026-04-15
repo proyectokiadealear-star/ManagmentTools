@@ -8,6 +8,7 @@ import { TransferirActivoDto } from './dto/transferir-activo.dto';
 import { BuscarActivoDto } from './dto/buscar-activo.dto';
 import { FiltrosActivoDto } from './dto/filtros-activo.dto';
 import { Movimiento } from './entities/movimiento.entity';
+import { LocationsService } from '../locations/locations.service';
 
 export interface EstadisticasActivos {
   total: number;
@@ -30,10 +31,33 @@ export interface DisponibilidadActivo {
 export class AssetsService {
   private readonly logger = new Logger(AssetsService.name);
 
-  constructor(private readonly firebaseService: FirebaseService) {}
+  constructor(
+    private readonly firebaseService: FirebaseService,
+    private readonly locationsService: LocationsService,
+  ) {}
 
   private get firestore(): Firestore {
     return this.firebaseService.getFirestore();
+  }
+
+  private normalizeSede(value?: string): string | undefined {
+    if (!value) return undefined;
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    return trimmed
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, '_')
+      .toUpperCase();
+  }
+
+  private async resolveSedeFromArea(areaId: string): Promise<string> {
+    const area = await this.locationsService.findAreaById(areaId);
+    const sede = this.normalizeSede(area.sede);
+    if (!sede) {
+      throw new NotFoundException(`Área ${areaId} no tiene sede configurada`);
+    }
+    return sede;
   }
 
   async findAll(): Promise<Activo[]> {
@@ -51,8 +75,11 @@ export class AssetsService {
 
   async create(createActivoDto: CreateActivoDto, usuarioId: string): Promise<Activo> {
     const now = new Date().toISOString();
+    const sedeDerivada = await this.resolveSedeFromArea(createActivoDto.areaId);
+
     const activo: Omit<Activo, 'id'> = {
       ...createActivoDto,
+      sede: sedeDerivada,
       estado: (createActivoDto.estado as Activo['estado']) || 'activo',
       estadoOperativo: 'disponible',
       createdAt: now,
@@ -196,9 +223,14 @@ export class AssetsService {
 
   async update(id: string, updateActivoDto: UpdateActivoDto): Promise<Activo> {
     const existente = await this.findOne(id);
+    const areaIdFinal = updateActivoDto.areaId ?? existente.areaId;
+    const sedeDerivada = await this.resolveSedeFromArea(areaIdFinal);
+
     const actualizado: Activo = {
       ...existente,
       ...updateActivoDto,
+      areaId: areaIdFinal,
+      sede: sedeDerivada,
       estado: (updateActivoDto.estado || existente.estado) as Activo['estado'],
       estadoOperativo: (updateActivoDto.estadoOperativo || existente.estadoOperativo) as Activo['estadoOperativo'],
       updatedAt: new Date().toISOString(),
@@ -236,6 +268,7 @@ export class AssetsService {
     usuarioNombre?: string,
   ): Promise<Activo> {
     const existente = await this.findOne(id);
+    const sedeDestino = await this.resolveSedeFromArea(transferirDto.areaId);
 
     const movimiento: Omit<Movimiento, 'id'> = {
       activoId: id,
@@ -244,12 +277,14 @@ export class AssetsService {
         areaId: existente.areaId,
         bahiaId: existente.bahiaId,
         rackId: existente.rackId,
+        sede: existente.sede,
       },
       hasta: {
         areaId: transferirDto.areaId,
         bahiaId: transferirDto.bahiaId,
         rackId: transferirDto.rackId,
         cajaId: transferirDto.cajaId,
+        sede: sedeDestino,
       },
       motivo: transferirDto.motivo,
       usuarioId,
@@ -343,9 +378,28 @@ export class AssetsService {
       resultado = resultado.filter(a => a.estadoOperativo === filtrosDto.estadoOperativo);
     }
 
-    // Filtro por área
-    if (filtrosDto.areaId) {
-      resultado = resultado.filter(a => a.areaId === filtrosDto.areaId);
+    const areaFiltro = filtrosDto.areaId;
+    const sedeFiltro = this.normalizeSede(filtrosDto.sede);
+
+    // Filtro por combinación sede + área determinista
+    if (areaFiltro && sedeFiltro) {
+      const sedeArea = await this.resolveSedeFromArea(areaFiltro);
+      if (this.normalizeSede(sedeArea) !== sedeFiltro) {
+        return [];
+      }
+      resultado = resultado.filter(a => a.areaId === areaFiltro);
+    } else {
+      // Filtro por área
+      if (areaFiltro) {
+        resultado = resultado.filter(a => a.areaId === areaFiltro);
+      }
+
+      // Filtro por sede
+      if (sedeFiltro) {
+        resultado = resultado.filter(
+          a => this.normalizeSede(a.sede) === sedeFiltro,
+        );
+      }
     }
 
     return resultado;
@@ -396,6 +450,7 @@ export class AssetsService {
           valor: 2500.00,
           vidaUtil: 5,
           areaId: 'area-taller',
+          sede: 'SURMOTOR',
           bahiaId: 'bahia-diagnostico',
           rackId: 'rack-estacion-1',
           cajaId: 'caja-mesa-mendoza',
@@ -425,6 +480,7 @@ export class AssetsService {
           valor: 450.00,
           vidaUtil: 3,
           areaId: 'area-recepcion',
+          sede: 'SURMOTOR',
           bahiaId: 'bahia-atencion-cliente',
           rackId: 'rack-modulo-3',
           cajaId: 'caja-escritorio-asesor-3',
@@ -454,6 +510,7 @@ export class AssetsService {
           valor: 650.00,
           vidaUtil: 10,
           areaId: 'area-bodega',
+          sede: 'SURMOTOR',
           bahiaId: 'bahia-herramientas-especiales',
           rackId: 'rack-estante-b',
           cajaId: 'caja-estante-b2',
@@ -483,6 +540,7 @@ export class AssetsService {
           valor: 120.00,
           vidaUtil: 2,
           areaId: 'area-bodega',
+          sede: 'SURMOTOR',
           bahiaId: 'bahia-vehiculos-electricos',
           rackId: 'rack-armario-ev1',
           cajaId: 'caja-ev1-slot-a',
@@ -511,6 +569,7 @@ export class AssetsService {
           valor: 18500.00,
           vidaUtil: 8,
           areaId: 'area-taller',
+          sede: 'SURMOTOR',
           bahiaId: 'bahia-alineacion',
           rackId: 'rack-foso-1',
           cajaId: 'caja-foso1-plataforma',

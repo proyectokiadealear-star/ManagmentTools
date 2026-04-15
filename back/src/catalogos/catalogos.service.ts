@@ -3,11 +3,17 @@ import { FirebaseService } from '../firebase/firebase.service';
 import { Firestore } from 'firebase-admin/firestore';
 import { CatalogoItem, CatalogoTipo } from './entities/catalogo-item.entity';
 import { CreateCatalogoItemDto, UpdateCatalogoItemDto } from './dto/create-catalogo-item.dto';
+import { Sede } from '../common/enums/sede.enum';
 
 @Injectable()
 export class CatalogosService {
   private readonly logger = new Logger(CatalogosService.name);
   private readonly COLLECTION = 'catalogos';
+  private readonly BASE_SEDES: readonly string[] = [
+    Sede.SURMOTOR,
+    Sede.GRANDA_CENTENO,
+    Sede.SHYRIS,
+  ];
 
   constructor(private readonly firebaseService: FirebaseService) {}
 
@@ -15,8 +21,56 @@ export class CatalogosService {
     return this.firebaseService.getFirestore();
   }
 
+  private normalizeSedeNombre(value?: string): string | undefined {
+    if (!value) return undefined;
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    return trimmed
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, '_')
+      .toUpperCase();
+  }
+
+  private async ensureBaseSedes(): Promise<void> {
+    const snapshot = await this.firestore
+      .collection(this.COLLECTION)
+      .where('catalogo', '==', 'sede')
+      .get();
+
+    const existentes = new Set(
+      snapshot.docs
+        .map(doc => this.normalizeSedeNombre((doc.data() as { nombre?: string }).nombre))
+        .filter((nombre): nombre is string => !!nombre),
+    );
+
+    const faltantes = this.BASE_SEDES.filter(sede => !existentes.has(sede));
+    if (faltantes.length === 0) return;
+
+    const now = new Date().toISOString();
+    await Promise.all(
+      faltantes.map(nombre =>
+        this.firestore.collection(this.COLLECTION).add({
+          catalogo: 'sede',
+          nombre,
+          parentId: null,
+          activo: true,
+          createdAt: now,
+          updatedAt: now,
+        }),
+      ),
+    );
+
+    this.logger.log(`ensureBaseSedes: agregadas ${faltantes.length} sedes base (${faltantes.join(', ')})`);
+  }
+
   async findAll(catalogo?: string, parentId?: string): Promise<CatalogoItem[]> {
     this.logger.log(`findAll: catalogo=${catalogo ?? 'all'}, parentId=${parentId ?? 'none'}`);
+
+    if (catalogo === 'sede' && !parentId) {
+      await this.ensureBaseSedes();
+    }
+
     let query: FirebaseFirestore.Query = this.firestore.collection(this.COLLECTION);
 
     if (catalogo) {
