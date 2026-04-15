@@ -50,9 +50,11 @@ export function AssetFormModal({
   initialData
 }: AssetFormModalProps) {
   const [formData, setFormData] = useState<Partial<Asset>>(defaultAsset);
+  const [ubicacionFisicaWarning, setUbicacionFisicaWarning] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Catálogos dinámicos ──
@@ -81,6 +83,11 @@ export function AssetFormModal({
       .replace(/\s+/g, '_')
       .toUpperCase();
   }, []);
+
+  const normalizarSedeComparable = React.useCallback(
+    (value?: string): string | undefined => normalizarSede(value)?.replace(/_/g, ''),
+    [normalizarSede],
+  );
 
   const sedesDisponibles = React.useMemo(
     () => Array.from(
@@ -140,6 +147,24 @@ export function AssetFormModal({
     setFormData(prev => ({ ...prev, sede: sedeArea }));
   }, [formData.area, formData.sede, areas, normalizarSede]);
 
+  useEffect(() => {
+    if (!formData.area || !formData.sede) {
+      setUbicacionFisicaWarning(null);
+      return;
+    }
+
+    const areaSeleccionada = areas.find(a => a.id === formData.area);
+    const sedeArea = normalizarSedeComparable(areaSeleccionada?.sede);
+    const sedeActual = normalizarSedeComparable(formData.sede);
+
+    if (areaSeleccionada && sedeArea && sedeActual && sedeArea !== sedeActual) {
+      setUbicacionFisicaWarning('La sede seleccionada no coincide con el área actual. Revisa el área si deseas mover el activo, pero no se borrará tu ubicación física automáticamente.');
+      return;
+    }
+
+    setUbicacionFisicaWarning(null);
+  }, [formData.area, formData.sede, areas, normalizarSedeComparable]);
+
   // Cargar racks cuando cambia la bahía
   useEffect(() => {
     if (!formData.bahia) { setRacks([]); setCajas([]); return; }
@@ -195,6 +220,17 @@ export function AssetFormModal({
   };
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    const areaSeleccionada = areas.find(a => a.id === formData.area);
+    const sedeArea = normalizarSedeComparable(areaSeleccionada?.sede);
+    const sedeActual = normalizarSedeComparable(formData.sede);
+
+    if (formData.area && formData.sede && sedeArea && sedeActual && sedeArea !== sedeActual) {
+      setSaveError('No se puede guardar: la sede seleccionada no coincide con el área. Corrige sede o área antes de continuar.');
+      return;
+    }
+
+    setSaveError(null);
     // Limpiar borrador al guardar exitosamente
     sessionStorage.removeItem(FORM_CACHE_KEY);
     onSave(formData as Asset);
@@ -499,7 +535,11 @@ export function AssetFormModal({
                       className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500">
                       <option value="">— Seleccionar área —</option>
                       {areas
-                        .filter(a => !formData.sede || normalizarSede(a.sede) === normalizarSede(formData.sede))
+                        .filter(a => {
+                          if (!formData.sede) return true;
+                          if (a.id === formData.area) return true;
+                          return normalizarSedeComparable(a.sede) === normalizarSedeComparable(formData.sede);
+                        })
                         .map(a => (
                         <option key={a.id} value={a.id}>{a.nombre}</option>
                       ))}
@@ -514,16 +554,9 @@ export function AssetFormModal({
                       value={formData.sede ?? ''}
                       onChange={e => {
                         const nextSede = e.target.value || undefined;
-                        const areaSeleccionada = areas.find(a => a.id === formData.area);
-                        const areaIncompatible =
-                          !!nextSede &&
-                          !!areaSeleccionada &&
-                          normalizarSede(areaSeleccionada.sede) !== normalizarSede(nextSede);
-
                         setFormData(prev => ({
                           ...prev,
                           sede: nextSede,
-                          ...(areaIncompatible ? { area: undefined, bahia: '', rack: '', caja: '' } : {}),
                         }));
                       }}
                       className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-amber-500 focus:border-amber-500"
@@ -589,6 +622,16 @@ export function AssetFormModal({
                     </select>
                   </div>
                 </div>
+                {ubicacionFisicaWarning && (
+                  <div className="mt-3 px-3 py-2 bg-amber-50 border border-amber-100 rounded-md text-xs text-amber-700">
+                    {ubicacionFisicaWarning}
+                  </div>
+                )}
+                {saveError && (
+                  <div className="mt-3 px-3 py-2 bg-rose-50 border border-rose-100 rounded-md text-xs text-rose-700">
+                    {saveError}
+                  </div>
+                )}
                 <div className="mt-3 px-3 py-2 bg-blue-50 border border-blue-100 rounded-md text-xs text-blue-600">
                   Jerarquía: Área (obligatorio) → Bahía → Rack → Caja (opcionales). Los equipos grandes pueden asignarse solo a un área.
                 </div>

@@ -138,7 +138,100 @@ describe('AssetsService — sede derivada y filtros', () => {
           sede: 'GRANDA_CENTENO',
         }),
       );
+      expect(movimientosAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tipo: 'transferencia',
+          motivo: 'Cambio/actualización de sede desde actualización de activo',
+          before: expect.objectContaining({
+            areaId: 'area-origen',
+            sede: 'SURMOTOR',
+          }),
+          after: expect.objectContaining({
+            areaId: 'area-destino',
+            sede: 'GRANDA_CENTENO',
+          }),
+        }),
+      );
       expect(updated.sede).toBe('GRANDA_CENTENO');
+    });
+
+    it('update: registra motivo explícito y preserva metadatos previos relevantes', async () => {
+      jest.spyOn(service, 'findOne').mockResolvedValue({
+        id: 'A1',
+        nombre: 'Activo',
+        tipo: 'Equipo',
+        areaId: 'area-origen',
+        sede: 'SURMOTOR',
+        bahiaId: 'b-old',
+        rackId: 'r-old',
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-15',
+        usuarioId: 'user-legacy',
+        estado: 'activo',
+        estadoOperativo: 'disponible',
+      } as any);
+
+      mockLocationsService.findAreaById.mockResolvedValue({
+        id: 'area-destino',
+        sede: 'Shyris',
+      });
+
+      await service.update(
+        'A1',
+        {
+          areaId: 'area-destino',
+          bahiaId: 'b-new',
+          motivoCambioSede: 'Reubicación operativa',
+        } as any,
+      );
+
+      expect(movimientosAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          motivo: 'Reubicación operativa',
+          before: expect.objectContaining({
+            areaId: 'area-origen',
+            sede: 'SURMOTOR',
+            bahiaId: 'b-old',
+            rackId: 'r-old',
+          }),
+          after: expect.objectContaining({
+            areaId: 'area-destino',
+            sede: 'SHYRIS',
+            bahiaId: 'b-new',
+            rackId: 'r-old',
+          }),
+          metadata: {
+            previous: expect.objectContaining({
+              areaId: 'area-origen',
+              sede: 'SURMOTOR',
+              updatedAt: '2026-01-15',
+            }),
+          },
+        }),
+      );
+    });
+
+    it('update: no registra evento cuando no hay cambio de sede/área', async () => {
+      jest.spyOn(service, 'findOne').mockResolvedValue({
+        id: 'A1',
+        nombre: 'Activo',
+        tipo: 'Equipo',
+        areaId: 'area-origen',
+        sede: 'SURMOTOR',
+        estado: 'activo',
+        estadoOperativo: 'disponible',
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      } as any);
+
+      mockLocationsService.findAreaById.mockResolvedValue({
+        id: 'area-origen',
+        sede: 'Sur Motor',
+      });
+
+      await service.update('A1', { observacion: 'Cambio menor' } as any);
+
+      expect(movimientosAdd).not.toHaveBeenCalled();
     });
 
     it('transferir: deriva movimiento.hasta.sede y sede final del activo desde area destino', async () => {
@@ -242,6 +335,9 @@ describe('AssetsService — sede derivada y filtros', () => {
       { id: '1', areaId: 'area-norte-1', sede: 'SEDE_NORTE', nombre: 'A', tipo: 'T' },
       { id: '2', areaId: 'area-norte-2', sede: 'sede norte', nombre: 'B', tipo: 'T' },
       { id: '3', areaId: 'area-sur-1', sede: 'SEDE_SUR', nombre: 'C', tipo: 'T' },
+      { id: '4', areaId: 'area-surmotor-1', sede: 'SUR_MOTOR', nombre: 'D', tipo: 'T' },
+      { id: '5', areaId: 'area-surmotor-2', sede: 'SURMOTOR', nombre: 'E', tipo: 'T' },
+      { id: '6', areaId: 'area-surmotor-3', sede: ' Sur-Motor ', nombre: 'F', tipo: 'T' },
     ];
 
     beforeEach(() => {
@@ -273,6 +369,22 @@ describe('AssetsService — sede derivada y filtros', () => {
       );
 
       expect(result).toEqual([]);
+    });
+
+    it('filtro por SURMOTOR matchea variantes con guion/underscore/espacios', async () => {
+      const result = await service.search({}, { sede: 'SURMOTOR' } as any);
+      expect(result.map(a => a.id)).toEqual(['4', '5', '6']);
+    });
+
+    it('combinación sede+area con SURMOTOR es consistente con comparación normalizada', async () => {
+      mockLocationsService.findAreaById.mockResolvedValue({ id: 'area-surmotor-1', sede: 'Sur Motor' });
+
+      const result = await service.search(
+        {},
+        { sede: 'SURMOTOR', areaId: 'area-surmotor-1' } as any,
+      );
+
+      expect(result.map(a => a.id)).toEqual(['4']);
     });
   });
 });

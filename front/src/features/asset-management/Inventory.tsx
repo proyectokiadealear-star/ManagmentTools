@@ -90,8 +90,12 @@ export function Inventory() {
       }
       setIsFormModalOpen(false);
       setAssetToEdit(null);
-    } catch {
-      showToast('error', 'No se pudo guardar el activo. Intente de nuevo.');
+    } catch (error) {
+      const backendMessage =
+        error instanceof Error && error.message
+          ? error.message
+          : 'No se pudo guardar el activo. Intente de nuevo.';
+      showToast('error', backendMessage);
     }
   };
   const handleOpenNewAsset = () => {

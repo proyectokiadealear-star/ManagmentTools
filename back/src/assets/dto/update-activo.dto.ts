@@ -5,6 +5,14 @@ import { CreateActivoDto } from './create-activo.dto';
 
 export class UpdateActivoDto extends PartialType(CreateActivoDto) {
   @ApiPropertyOptional({
+    example: 'Reasignación por reorganización operativa',
+    description: 'Motivo del cambio de sede/área al actualizar un activo',
+  })
+  @IsOptional()
+  @IsString()
+  motivoCambioSede?: string;
+
+  @ApiPropertyOptional({
     example: 'SURMOTOR',
     description: 'Sede opcional legacy/informativa. Si cambia areaId, el backend recalcula y persiste la sede derivada.',
   })

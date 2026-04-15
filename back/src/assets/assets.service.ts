@@ -47,8 +47,15 @@ export class AssetsService {
     return trimmed
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, '_')
+      .replace(/[\s-]+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '')
       .toUpperCase();
+  }
+
+  private normalizeSedeComparable(value?: string): string | undefined {
+    const normalized = this.normalizeSede(value);
+    return normalized?.replace(/_/g, '');
   }
 
   private async resolveSedeFromArea(areaId: string): Promise<string> {
@@ -58,6 +65,81 @@ export class AssetsService {
       throw new NotFoundException(`Área ${areaId} no tiene sede configurada`);
     }
     return sede;
+  }
+
+  private isSedeAreaChange(
+    existente: Activo,
+    areaIdFinal: string,
+    sedeDerivada: string,
+  ): boolean {
+    return (
+      areaIdFinal !== existente.areaId ||
+      this.normalizeSedeComparable(sedeDerivada) !== this.normalizeSedeComparable(existente.sede)
+    );
+  }
+
+  private async registrarMovimientoCambioSede(params: {
+    id: string;
+    existente: Activo;
+    areaIdFinal: string;
+    sedeDerivada: string;
+    updateActivoDto: UpdateActivoDto;
+  }): Promise<void> {
+    const { id, existente, areaIdFinal, sedeDerivada, updateActivoDto } = params;
+    const movimiento: Omit<Movimiento, 'id'> & {
+      metadata?: Record<string, unknown>;
+      before?: Record<string, unknown>;
+      after?: Record<string, unknown>;
+    } = {
+      activoId: id,
+      activoNombre: updateActivoDto.nombre ?? existente.nombre,
+      desde: {
+        areaId: existente.areaId,
+        bahiaId: existente.bahiaId,
+        rackId: existente.rackId,
+        cajaId: existente.cajaId,
+        sede: existente.sede,
+      },
+      hasta: {
+        areaId: areaIdFinal,
+        bahiaId: updateActivoDto.bahiaId ?? existente.bahiaId,
+        rackId: updateActivoDto.rackId ?? existente.rackId,
+        cajaId: updateActivoDto.cajaId ?? existente.cajaId,
+        sede: sedeDerivada,
+      },
+      motivo:
+        updateActivoDto.motivoCambioSede?.trim() ||
+        'Cambio/actualización de sede desde actualización de activo',
+      usuarioId: existente.usuarioId ?? 'sistema',
+      fecha: new Date().toISOString(),
+      tipo: 'transferencia',
+      before: {
+        areaId: existente.areaId,
+        sede: existente.sede,
+        bahiaId: existente.bahiaId,
+        rackId: existente.rackId,
+        cajaId: existente.cajaId,
+      },
+      after: {
+        areaId: areaIdFinal,
+        sede: sedeDerivada,
+        bahiaId: updateActivoDto.bahiaId ?? existente.bahiaId,
+        rackId: updateActivoDto.rackId ?? existente.rackId,
+        cajaId: updateActivoDto.cajaId ?? existente.cajaId,
+      },
+      metadata: {
+        previous: {
+          sede: existente.sede,
+          areaId: existente.areaId,
+          bahiaId: existente.bahiaId,
+          rackId: existente.rackId,
+          cajaId: existente.cajaId,
+          updatedAt: existente.updatedAt,
+        },
+      },
+    };
+
+    await this.firestore.collection('movimientos').add(movimiento);
   }
 
   async findAll(): Promise<Activo[]> {
@@ -225,10 +307,25 @@ export class AssetsService {
     const existente = await this.findOne(id);
     const areaIdFinal = updateActivoDto.areaId ?? existente.areaId;
     const sedeDerivada = await this.resolveSedeFromArea(areaIdFinal);
+    const hayCambioSedeArea = this.isSedeAreaChange(existente, areaIdFinal, sedeDerivada);
+
+    if (hayCambioSedeArea) {
+      await this.registrarMovimientoCambioSede({
+        id,
+        existente,
+        areaIdFinal,
+        sedeDerivada,
+        updateActivoDto,
+      });
+    }
+
+    const { motivoCambioSede, ...updatePayload } = updateActivoDto as UpdateActivoDto & {
+      motivoCambioSede?: string;
+    };
 
     const actualizado: Activo = {
       ...existente,
-      ...updateActivoDto,
+      ...updatePayload,
       areaId: areaIdFinal,
       sede: sedeDerivada,
       estado: (updateActivoDto.estado || existente.estado) as Activo['estado'],
@@ -379,12 +476,12 @@ export class AssetsService {
     }
 
     const areaFiltro = filtrosDto.areaId;
-    const sedeFiltro = this.normalizeSede(filtrosDto.sede);
+    const sedeFiltro = this.normalizeSedeComparable(filtrosDto.sede);
 
     // Filtro por combinación sede + área determinista
     if (areaFiltro && sedeFiltro) {
       const sedeArea = await this.resolveSedeFromArea(areaFiltro);
-      if (this.normalizeSede(sedeArea) !== sedeFiltro) {
+      if (this.normalizeSedeComparable(sedeArea) !== sedeFiltro) {
         return [];
       }
       resultado = resultado.filter(a => a.areaId === areaFiltro);
@@ -397,7 +494,7 @@ export class AssetsService {
       // Filtro por sede
       if (sedeFiltro) {
         resultado = resultado.filter(
-          a => this.normalizeSede(a.sede) === sedeFiltro,
+          a => this.normalizeSedeComparable(a.sede) === sedeFiltro,
         );
       }
     }

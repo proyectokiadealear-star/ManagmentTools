@@ -36,9 +36,14 @@ export const AssetFilterPanel: React.FC<AssetFilterPanelProps> = ({
     return trimmed
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, '_')
+      .replace(/[\s-]+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '')
       .toUpperCase();
   };
+
+  const normalizarSedeComparable = (value?: string): string | undefined =>
+    normalizarSede(value)?.replace(/_/g, '');
 
   const sedesDisponibles = React.useMemo(
     () => Array.from(
@@ -113,7 +118,7 @@ export const AssetFilterPanel: React.FC<AssetFilterPanelProps> = ({
             const areaIncompatible =
               !!nextSede &&
               !!areaSeleccionada &&
-              normalizarSede(areaSeleccionada.sede) !== normalizarSede(nextSede);
+              normalizarSedeComparable(areaSeleccionada.sede) !== normalizarSedeComparable(nextSede);
 
             onChange({
               ...filtros,
@@ -139,7 +144,7 @@ export const AssetFilterPanel: React.FC<AssetFilterPanelProps> = ({
         >
           <option value="">Todas las áreas</option>
           {areas
-            .filter(a => !filtros.sede || normalizarSede(a.sede) === normalizarSede(filtros.sede))
+            .filter(a => !filtros.sede || normalizarSedeComparable(a.sede) === normalizarSedeComparable(filtros.sede))
             .map(a => (
             <option key={a.id} value={a.id}>{a.nombre}</option>
           ))}

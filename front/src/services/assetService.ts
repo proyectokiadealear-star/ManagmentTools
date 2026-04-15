@@ -173,6 +173,12 @@ export function mapActivoToAsset(a: ActivoAPI): Asset {
 function mapAssetToDto(data: Partial<Asset>): Record<string, unknown> {
   const dto: Record<string, unknown> = {};
 
+  const normalizeOptionalValue = (value: unknown): unknown => {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    return trimmed === '' ? undefined : trimmed;
+  };
+
   // Rename mismatched fields
   if (data.descripcion !== undefined) dto.nombre = data.descripcion;
   if (data.area !== undefined)        dto.areaId = data.area || undefined;
@@ -190,7 +196,8 @@ function mapAssetToDto(data: Partial<Asset>): Record<string, unknown> {
     'observacion', 'fechaUltimoMantenimiento', 'imagenUrl',
   ];
   for (const key of directFields) {
-    if (data[key] !== undefined) dto[key] = data[key];
+    const value = normalizeOptionalValue(data[key]);
+    if (value !== undefined) dto[key] = value;
   }
 
   // Map frontend estado labels → backend enum values

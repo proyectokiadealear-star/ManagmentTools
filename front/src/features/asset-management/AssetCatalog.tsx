@@ -28,9 +28,16 @@ export const AssetCatalog: React.FC = () => {
     return trimmed
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, '_')
+      .replace(/[\s-]+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '')
       .toUpperCase();
   }, []);
+
+  const normalizarSedeComparable = useCallback(
+    (value?: string) => normalizarSede(value)?.replace(/_/g, ''),
+    [normalizarSede],
+  );
 
   // Modal state
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
@@ -95,17 +102,17 @@ export const AssetCatalog: React.FC = () => {
 
     // Filtro por sede
     if (filtros.sede) {
-      const sedeFiltro = normalizarSede(filtros.sede);
-      resultado = resultado.filter(a => normalizarSede((a as any).sede) === sedeFiltro);
+      const sedeFiltro = normalizarSedeComparable(filtros.sede);
+      resultado = resultado.filter(a => normalizarSedeComparable((a as any).sede) === sedeFiltro);
     }
 
     // Filtro por área (nombre) + coherencia con sede
     if (filtros.areaId) {
       const areaSeleccionada = areas.find(ar => ar.id === filtros.areaId);
       const areaNombre = areaSeleccionada?.nombre;
-      const areaSede = normalizarSede(areaSeleccionada?.sede);
+      const areaSede = normalizarSedeComparable(areaSeleccionada?.sede);
 
-      if (filtros.sede && areaSede && areaSede !== normalizarSede(filtros.sede)) {
+      if (filtros.sede && areaSede && areaSede !== normalizarSedeComparable(filtros.sede)) {
         resultado = [];
       } else if (areaNombre) {
         resultado = resultado.filter(a =>
@@ -122,7 +129,7 @@ export const AssetCatalog: React.FC = () => {
     }
 
     return resultado;
-  }, [assets, query, filtros, areas, normalizarSede]);
+  }, [assets, query, filtros, areas, normalizarSedeComparable]);
 
   const handleView = useCallback((asset: Asset) => {
     setSelectedAsset(asset);
