@@ -1,12 +1,84 @@
 // consumablesService.ts — Real API calls via httpClient.
 import { httpClient } from './httpClient';
-import {
-  ConsumoInsumo,
-  CategoriaInsumo,
-} from '../data/mockData';
 
-// Re-export types so existing consumers keep working
-export type { ConsumoInsumo, CategoriaInsumo };
+export interface ConsumoInsumoApi {
+  id: string;
+  ordenTrabajoId: string;
+  insumoId: string;
+  insumoNombre: string;
+  insumoCodigo: string;
+  cantidad: number;
+  unidadMedida: string;
+  costoUnitario: number;
+  costoTotal: number;
+  cantidadEsperada: number;
+  desviacion: number;
+  justificacion?: string;
+  evidenciaUrl?: string;
+  tecnicoId: string;
+  tecnicoNombre: string;
+  areaId: string;
+  fechaRegistro: string;
+}
+
+export interface RegistrarConsumoPayload {
+  ordenTrabajoId: string;
+  insumoId: string;
+  cantidad: number;
+  tecnicoId: string;
+  tecnicoNombre: string;
+  areaId: string;
+  justificacion?: string;
+  evidenciaUrl?: string;
+}
+
+export interface ConsumoInsumo {
+  id: string;
+  ordenTrabajo: string;
+  tecnico: string;
+  fecha: string;
+  insumo: string;
+  categoria: string;
+  cantidad: number;
+  unidad: string;
+  costoUnitario: number;
+  costoTotal: number;
+  observacion?: string;
+}
+
+function mapConsumoApiToUi(item: ConsumoInsumoApi): ConsumoInsumo {
+  return {
+    id: item.id,
+    ordenTrabajo: item.ordenTrabajoId,
+    tecnico: item.tecnicoNombre,
+    fecha: item.fechaRegistro,
+    insumo: item.insumoNombre,
+    categoria: item.insumoCodigo,
+    cantidad: item.cantidad,
+    unidad: item.unidadMedida,
+    costoUnitario: item.costoUnitario,
+    costoTotal: item.costoTotal,
+    observacion: item.justificacion,
+  };
+}
+
+function normalizeToApiConsumo(data: RegistrarConsumoPayload | Omit<ConsumoInsumo, 'id'>): RegistrarConsumoPayload {
+  const candidate = data as RegistrarConsumoPayload;
+  if (candidate.ordenTrabajoId && candidate.insumoId && candidate.tecnicoId) {
+    return candidate;
+  }
+
+  const legacy = data as Omit<ConsumoInsumo, 'id'>;
+  return {
+    ordenTrabajoId: legacy.ordenTrabajo,
+    insumoId: '',
+    cantidad: legacy.cantidad,
+    tecnicoId: '',
+    tecnicoNombre: legacy.tecnico,
+    areaId: '',
+    justificacion: legacy.observacion,
+  };
+}
 
 // ─── EPP — Shared types ─────────────────────────────────────────────────────
 
@@ -99,43 +171,49 @@ export async function getConsumos(filters?: {
   if (filters?.tecnicoId) params.set('tecnicoId', filters.tecnicoId);
   if (filters?.areaId) params.set('areaId', filters.areaId);
   const qs = params.toString();
-  return httpClient.get<ConsumoInsumo[]>(
+  const data = await httpClient.get<ConsumoInsumoApi[]>(
     `/api/insumos/consumos${qs ? `?${qs}` : ''}`,
   );
+  return data.map(mapConsumoApiToUi);
 }
 
 export async function getConsumosByOT(otId: string): Promise<ConsumoInsumo[]> {
-  return httpClient.get<ConsumoInsumo[]>(
+  const data = await httpClient.get<ConsumoInsumoApi[]>(
     `/api/insumos/consumos/ot/${encodeURIComponent(otId)}`,
   );
+  return data.map(mapConsumoApiToUi);
 }
 
 export async function getConsumosByTecnico(tecnico: string): Promise<ConsumoInsumo[]> {
-  return httpClient.get<ConsumoInsumo[]>(
+  const data = await httpClient.get<ConsumoInsumoApi[]>(
     `/api/insumos/consumos/tecnico/${encodeURIComponent(tecnico)}`,
   );
+  return data.map(mapConsumoApiToUi);
 }
 
 export async function getConsumosByArea(areaId: string): Promise<ConsumoInsumo[]> {
   try {
-    return await httpClient.get<ConsumoInsumo[]>(
+    const data = await httpClient.get<ConsumoInsumoApi[]>(
       `/api/insumos/consumos/area/${encodeURIComponent(areaId)}`,
     );
+    return data.map(mapConsumoApiToUi);
   } catch {
-    console.warn('[consumablesService] getConsumosByArea — backend no disponible, usando mock');
+    console.warn('[consumablesService] getConsumosByArea — backend no disponible');
     return [];
   }
 }
 
-export async function getConsumosByCategoria(categoria: CategoriaInsumo): Promise<ConsumoInsumo[]> {
-  const all = await httpClient.get<ConsumoInsumo[]>('/api/insumos/consumos');
+export async function getConsumosByCategoria(categoria: string): Promise<ConsumoInsumo[]> {
+  const all = await getConsumos();
   return all.filter((c) => c.categoria === categoria);
 }
 
 export async function createConsumo(
-  data: Omit<ConsumoInsumo, 'id'>,
+  data: RegistrarConsumoPayload,
 ): Promise<ConsumoInsumo> {
-  return httpClient.post<ConsumoInsumo>('/api/insumos/consumo', data);
+  const payload = normalizeToApiConsumo(data);
+  const created = await httpClient.post<ConsumoInsumoApi>('/api/insumos/consumo', payload);
+  return mapConsumoApiToUi(created);
 }
 
 // ─── Insumos — Anomalías ────────────────────────────────────────────────────

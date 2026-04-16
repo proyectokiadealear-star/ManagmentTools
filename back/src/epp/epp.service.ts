@@ -3,12 +3,16 @@ import { Firestore } from 'firebase-admin/firestore';
 import { FirebaseService } from '../firebase/firebase.service';
 import { CatalogoEPP, EntregaEPP, ComparativaEPP } from './entities/epp.entity';
 import { CreateCatalogoEPPDto, UpdateCatalogoEPPDto, RegistrarEntregaDto } from './dto/epp.dto';
+import { UsuariosService } from '../usuarios/usuarios.service';
 
 @Injectable()
 export class EppService {
   private readonly logger = new Logger(EppService.name);
 
-  constructor(private readonly firebaseService: FirebaseService) {}
+  constructor(
+    private readonly firebaseService: FirebaseService,
+    private readonly usuariosService: UsuariosService,
+  ) {}
 
   private get firestore(): Firestore {
     return this.firebaseService.getFirestore();
@@ -49,6 +53,11 @@ export class EppService {
   // ═══════════════════════════════════════════════════════════════════════════════
 
   async registrarEntrega(dto: RegistrarEntregaDto): Promise<EntregaEPP> {
+    const usuario = await this.usuariosService.findAssignableById(dto.tecnicoId).catch(() => null);
+    if (!usuario) {
+      throw new BadRequestException('Usuario no elegible para asignación de insumos/EPP');
+    }
+
     const epp = await this.findOneCatalogo(dto.eppId);
 
     // If extraordinary, require a reason
@@ -93,7 +102,7 @@ export class EppService {
       eppNombre: epp.nombre,
       eppTipo: epp.tipo,
       tecnicoId: dto.tecnicoId,
-      tecnicoNombre: dto.tecnicoNombre,
+      tecnicoNombre: usuario.nombre,
       areaId: dto.areaId,
       cantidad: dto.cantidad,
       loteProveedor: dto.loteProveedor,

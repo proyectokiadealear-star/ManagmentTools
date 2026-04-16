@@ -3,6 +3,7 @@
 
 import { httpClient } from './httpClient';
 import { AreaTaller, Sede } from '@shared/types/enums';
+import { isAssignableUser } from '../features/consumables-safety/assignmentRole';
 
 export type RolUsuario = 'personal' | 'tecnico' | 'jefe';
 
@@ -43,6 +44,11 @@ const BASE = '/api/usuarios';
 // ─────────────────────────────────────────────────────────────────────────────
 export async function getUsuarios(): Promise<Usuario[]> {
   return httpClient.get<Usuario[]>(BASE);
+}
+
+export async function getUsuariosAsignables(): Promise<Usuario[]> {
+  const usuarios = await getUsuarios();
+  return usuarios.filter(isAssignableUser);
 }
 
 export async function getUsuario(id: string): Promise<Usuario> {

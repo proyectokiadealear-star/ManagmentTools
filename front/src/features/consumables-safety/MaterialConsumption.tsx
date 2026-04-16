@@ -5,7 +5,9 @@ import { computeStats } from '@shared/utils/stats';
 import { Pagination } from '@shared/components';
 import { usePagination } from '@shared/hooks/usePagination';
 import { getConsumos, createConsumo, getCatalogoInsumos } from '../../services/consumablesService';
-import type { ConsumoInsumo, CategoriaInsumo, CatalogoInsumo } from '../../services/consumablesService';
+import type { ConsumoInsumo, CatalogoInsumo, RegistrarConsumoPayload } from '../../services/consumablesService';
+import { getUsuariosAsignables } from '../../services/usuariosService';
+import type { Usuario } from '../../services/usuariosService';
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
@@ -14,14 +16,16 @@ export function MaterialConsumption() {
   const [consumos, setConsumos] = useState<ConsumoInsumo[]>([]);
   const [loading, setLoading] = useState(true);
   const [catalogo, setCatalogo] = useState<CatalogoInsumo[]>([]);
+  const [usuariosAsignables, setUsuariosAsignables] = useState<Usuario[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.allSettled([getConsumos(), getCatalogoInsumos()]).then(([rConsumos, rCatalogo]) => {
+    Promise.allSettled([getConsumos(), getCatalogoInsumos(), getUsuariosAsignables()]).then(([rConsumos, rCatalogo, rUsuarios]) => {
       if (cancelled) return;
       if (rConsumos.status === 'fulfilled') setConsumos(rConsumos.value);
       if (rCatalogo.status === 'fulfilled') setCatalogo(rCatalogo.value);
+      if (rUsuarios.status === 'fulfilled') setUsuariosAsignables(rUsuarios.value);
       setLoading(false);
     });
     return () => { cancelled = true; };
@@ -33,12 +37,21 @@ export function MaterialConsumption() {
   const [form, setForm] = useState({
     ordenTrabajo: '',
     insumoId: '',
+    tecnicoId: '',
     cantidad: '',
+    justificacion: '',
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [saveError, setSaveError] = useState<string>('');
 
   // Insumo seleccionado del catálogo
   const selectedInsumo = catalogo.find(i => i.id === form.insumoId) ?? null;
+  const selectedTecnico = usuariosAsignables.find((u) => u.id === form.tecnicoId) ?? null;
+  const cantidadNumerica = Number(form.cantidad);
+  const desviacionAbsoluta = selectedInsumo && cantidadNumerica > 0 && selectedInsumo.consumoPromedioPorOT > 0
+    ? Math.abs((cantidadNumerica - selectedInsumo.consumoPromedioPorOT) / selectedInsumo.consumoPromedioPorOT)
+    : 0;
+  const requiereJustificacion = desviacionAbsoluta > 0.2;
 
   // ── Derived values ───────────────────────────────────────────────────────
 
@@ -163,8 +176,15 @@ export function MaterialConsumption() {
     const errors: Record<string, string> = {};
     if (!form.ordenTrabajo.trim()) errors.ordenTrabajo = 'Número de OT requerido';
     if (!form.insumoId) errors.insumoId = 'Seleccione un insumo del catálogo';
+    if (!form.tecnicoId) errors.tecnicoId = 'Seleccione un usuario asignable';
     if (!form.cantidad || Number(form.cantidad) <= 0)
       errors.cantidad = 'Ingrese una cantidad mayor a 0';
+    if (selectedTecnico && !selectedTecnico.area) {
+      errors.tecnicoId = 'El usuario seleccionado no tiene área válida para asignación';
+    }
+    if (requiereJustificacion && !form.justificacion.trim()) {
+      errors.justificacion = 'Se requiere justificación cuando la cantidad se desvía más del 20% del promedio';
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -172,21 +192,17 @@ export function MaterialConsumption() {
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
-    if (!validateForm() || !selectedInsumo) return;
+    if (!validateForm() || !selectedInsumo || !selectedTecnico) return;
+    setSaveError('');
 
-    const cantidad = Number(form.cantidad);
-    const costoTotal = cantidad * selectedInsumo.costoUnitario;
-
-    const payload: Omit<ConsumoInsumo, 'id'> = {
-      ordenTrabajo: form.ordenTrabajo.trim(),
-      tecnico: role === 'jefe' ? 'Jefe de Taller' : role === 'tecnico' ? 'Técnico' : 'Personal',
-      fecha: new Date().toISOString().split('T')[0],
-      insumo: selectedInsumo.nombre,
-      categoria: selectedInsumo.tipo as CategoriaInsumo,
-      cantidad,
-      unidad: selectedInsumo.unidadMedida,
-      costoUnitario: selectedInsumo.costoUnitario,
-      costoTotal,
+    const payload: RegistrarConsumoPayload = {
+      ordenTrabajoId: form.ordenTrabajo.trim(),
+      insumoId: selectedInsumo.id,
+      cantidad: Number(form.cantidad),
+      tecnicoId: selectedTecnico.id,
+      tecnicoNombre: selectedTecnico.nombre,
+      areaId: selectedTecnico.area,
+      ...(form.justificacion.trim() && { justificacion: form.justificacion.trim() }),
     };
 
     setSaving(true);
@@ -194,10 +210,11 @@ export function MaterialConsumption() {
       const created = await createConsumo(payload);
       setConsumos(prev => [...prev, created]);
       setShowFormModal(false);
-      setForm({ ordenTrabajo: '', insumoId: '', cantidad: '' });
+      setForm({ ordenTrabajo: '', insumoId: '', tecnicoId: '', cantidad: '', justificacion: '' });
       setFormErrors({});
     } catch (err) {
       console.error('[MaterialConsumption] Error al guardar consumo:', err);
+      setSaveError(err instanceof Error ? err.message : 'No se pudo guardar el consumo');
     } finally {
       setSaving(false);
     }
@@ -205,8 +222,9 @@ export function MaterialConsumption() {
 
   function handleCloseModal() {
     setShowFormModal(false);
+    setSaveError('');
     setFormErrors({});
-    setForm({ ordenTrabajo: '', insumoId: '', cantidad: '' });
+    setForm({ ordenTrabajo: '', insumoId: '', tecnicoId: '', cantidad: '', justificacion: '' });
   }
 
   const costoTotalPreview = selectedInsumo && form.cantidad
@@ -495,6 +513,12 @@ export function MaterialConsumption() {
 
             {/* Modal body */}
             <div className="px-6 py-4 space-y-4">
+              {saveError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">
+                  {saveError}
+                </div>
+              )}
+
               {/* Advertencia si el catálogo está vacío */}
               {catalogo.length === 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-700">
@@ -556,6 +580,35 @@ export function MaterialConsumption() {
               {/* Cantidad */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Usuario asignable <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={form.tecnicoId}
+                  onChange={e => setForm(f => ({ ...f, tecnicoId: e.target.value }))}
+                  className={`w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                    formErrors.tecnicoId ? 'border-red-400' : 'border-gray-300'
+                  }`}
+                >
+                  <option value="">Seleccionar usuario elegible…</option>
+                  {usuariosAsignables.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.nombre} — {u.rol}
+                    </option>
+                  ))}
+                </select>
+                {formErrors.tecnicoId && (
+                  <p className="text-xs text-red-500 mt-1">{formErrors.tecnicoId}</p>
+                )}
+                {selectedTecnico && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Área de asignación: <strong>{selectedTecnico.area}</strong>
+                  </p>
+                )}
+              </div>
+
+              {/* Cantidad */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Cantidad{selectedInsumo ? ` (${selectedInsumo.unidadMedida})` : ''} <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -571,6 +624,31 @@ export function MaterialConsumption() {
                 />
                 {formErrors.cantidad && (
                   <p className="text-xs text-red-500 mt-1">{formErrors.cantidad}</p>
+                )}
+                {selectedInsumo && requiereJustificacion && (
+                  <p className="text-xs text-amber-700 mt-1">
+                    La cantidad se desvía más del 20% del promedio ({selectedInsumo.consumoPromedioPorOT} {selectedInsumo.unidadMedida});
+                    agregue justificación para registrar.
+                  </p>
+                )}
+              </div>
+
+              {/* Justificación */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Justificación {requiereJustificacion && <span className="text-red-500">*</span>}
+                </label>
+                <textarea
+                  value={form.justificacion}
+                  onChange={e => setForm(f => ({ ...f, justificacion: e.target.value }))}
+                  placeholder="Explique motivo cuando el consumo supera la tolerancia"
+                  rows={2}
+                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none ${
+                    formErrors.justificacion ? 'border-red-400' : 'border-gray-300'
+                  }`}
+                />
+                {formErrors.justificacion && (
+                  <p className="text-xs text-red-500 mt-1">{formErrors.justificacion}</p>
                 )}
               </div>
 

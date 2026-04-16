@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { HardHat, Plus, X, AlertTriangle, CheckCircle, Users, Package, Loader2 } from 'lucide-react';
 import { useRole } from '@shared/context/AssetContext';
+import { useAuth } from '@shared/context/AuthContext';
 import { computeStats } from '@shared/utils/stats';
 import { ModalShell, Pagination } from '@shared/components';
 import { usePagination } from '@shared/hooks/usePagination';
@@ -11,7 +12,7 @@ import {
   getCatalogoEPP,
 } from '../../services/consumablesService';
 import type { EntregaEPP, CatalogoEPP, RegistrarEntregaPayload } from '../../services/consumablesService';
-import { getUsuarios } from '../../services/usuariosService';
+import { getUsuariosAsignables } from '../../services/usuariosService';
 import { getAreas } from '../../services/assetService';
 
 type AlertItem = {
@@ -22,11 +23,12 @@ type AlertItem = {
   severity: 'Media' | 'Alta';
 };
 
-type Usuario = { id: string; nombre: string };
+type Usuario = { id: string; nombre: string; area: string; rol: string };
 type Area = { id: string; nombre: string };
 
 export function PPEManagement() {
   const role = useRole();
+  const { user } = useAuth();
   const [entregas, setEntregas] = useState<EntregaEPP[]>([]);
   const [catalogo, setCatalogo] = useState<CatalogoEPP[]>([]);
   const [tecnicosList, setTecnicosList] = useState<Usuario[]>([]);
@@ -39,13 +41,20 @@ export function PPEManagement() {
     Promise.all([
       getEntregasEPP(),
       getCatalogoEPP().catch(() => [] as CatalogoEPP[]),
-      getUsuarios().catch(() => []),
+      getUsuariosAsignables().catch(() => []),
       getAreas().catch(() => []),
     ]).then(([data, cat, usuarios, areas]) => {
       if (!cancelled) {
         setEntregas(data);
         setCatalogo(cat);
-        setTecnicosList(usuarios.map((u: { id?: string; nombre: string }) => ({ id: u.id ?? u.nombre, nombre: u.nombre })));
+        setTecnicosList(
+          usuarios.map((u: { id?: string; nombre: string; area?: string; rol?: string }) => ({
+            id: u.id ?? u.nombre,
+            nombre: u.nombre,
+            area: u.area ?? '',
+            rol: u.rol ?? 'no_elegible',
+          })),
+        );
         setAreasList(areas.map((a: { id?: string; nombre: string }) => ({ id: a.id ?? a.nombre, nombre: a.nombre })));
         setLoading(false);
       }
@@ -203,6 +212,7 @@ export function PPEManagement() {
   async function handleSave() {
     if (!validateForm()) return;
     if (!selectedTecnico) return;
+    if (!user) return;
 
     const payload: RegistrarEntregaPayload = {
       eppId: form.eppId,
@@ -215,8 +225,8 @@ export function PPEManagement() {
       ...(form.esExtraordinaria && form.motivoExtraordinaria.trim() && {
         motivoExtraordinaria: form.motivoExtraordinaria.trim(),
       }),
-      entregadoPor: selectedTecnico.id,
-      entregadoPorNombre: selectedTecnico.nombre,
+      entregadoPor: user.uid,
+      entregadoPorNombre: user.nombre,
     };
 
     setSaving(true);
@@ -643,13 +653,18 @@ export function PPEManagement() {
                         formErrors.tecnicoId ? 'border-red-400' : 'border-gray-300'
                       }`}
                     >
-                      <option value="">Seleccionar técnico...</option>
+                      <option value="">Seleccionar usuario elegible...</option>
                       {tecnicosList.map(t => (
-                        <option key={t.id} value={t.id}>{t.nombre}</option>
+                        <option key={t.id} value={t.id}>{t.nombre} — {t.rol}</option>
                       ))}
                     </select>
                     {formErrors.tecnicoId && (
                       <p className="text-xs text-red-500 mt-1">{formErrors.tecnicoId}</p>
+                    )}
+                    {selectedTecnico && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        Área del receptor: {selectedTecnico.area}
+                      </p>
                     )}
                   </div>
 

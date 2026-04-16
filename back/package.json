@@ -11,7 +11,7 @@
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main",
+    "start:prod": "node dist/src/main.js",
     "seed": "ts-node --project tsconfig.seed.json -r tsconfig-paths/register src/seed/seed.ts",
     "seed:reset": "ts-node --project tsconfig.seed.json -r tsconfig-paths/register src/seed/seed.ts --reset",
     "sede:diagnostico": "ts-node -r tsconfig-paths/register scripts/sede-diagnostico.ts",

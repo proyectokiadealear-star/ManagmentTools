@@ -65,11 +65,11 @@ export class RegistrarEntregaDto {
   @IsString()
   eppId: string;
 
-  @ApiProperty({ example: 'user-003', description: 'ID del técnico que recibe el EPP' })
+  @ApiProperty({ example: 'USR-003', description: 'ID del usuario receptor del EPP (debe ser elegible y activo)' })
   @IsString()
   tecnicoId: string;
 
-  @ApiProperty({ example: 'Miguel Sánchez', description: 'Nombre del técnico' })
+  @ApiProperty({ example: 'Juan Castro', description: 'Nombre del usuario receptor del EPP' })
   @IsString()
   tecnicoNombre: string;
 
@@ -96,11 +96,11 @@ export class RegistrarEntregaDto {
   @IsString()
   motivoExtraordinaria?: string;
 
-  @ApiProperty({ example: 'user-001', description: 'ID de quien entrega el EPP' })
+  @ApiProperty({ example: 'USR-001', description: 'ID del actor que realiza la entrega (entregador)' })
   @IsString()
   entregadoPor: string;
 
-  @ApiProperty({ example: 'Carlos Ramírez', description: 'Nombre de quien entrega' })
+  @ApiProperty({ example: 'Carlos Ramírez', description: 'Nombre del actor que realiza la entrega' })
   @IsString()
   entregadoPorNombre: string;
 }

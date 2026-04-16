@@ -29,6 +29,7 @@ function sanitize(raw: string): string {
 
 /* ─────────────── tabs ─────────────── */
 
+
 type Tab =
   | 'sede'
   | 'tipo-activo'

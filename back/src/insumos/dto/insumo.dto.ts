@@ -104,15 +104,15 @@ export class RegistrarConsumoDto {
   @Min(0.01)
   cantidad: number;
 
-  @ApiProperty({ example: 'user-003', description: 'ID del técnico que registra el consumo' })
+  @ApiProperty({ example: 'USR-003', description: 'ID del usuario receptor del consumo (debe ser elegible y activo)' })
   @IsString()
   tecnicoId: string;
 
-  @ApiProperty({ example: 'Miguel Sánchez', description: 'Nombre del técnico' })
+  @ApiProperty({ example: 'Juan Castro', description: 'Nombre del usuario receptor (se valida contra usuarios reales)' })
   @IsString()
   tecnicoNombre: string;
 
-  @ApiProperty({ example: 'area-taller', description: 'ID del área donde se consumió' })
+  @ApiProperty({ example: 'TALLER', description: 'ID/código del área donde se consumió el insumo' })
   @IsString()
   areaId: string;
 

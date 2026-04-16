@@ -11,6 +11,7 @@ import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 import { Sede } from '../common/enums/sede.enum';
 import { AreaTaller } from '../common/enums/area-taller.enum';
+import { isAssignableRole } from './assignment-role.util';
 
 @Injectable()
 export class UsuariosService {
@@ -46,6 +47,14 @@ export class UsuariosService {
     const doc = await this.firestore.collection('usuarios').doc(id).get();
     if (!doc.exists) throw new NotFoundException(`Usuario ${id} no encontrado`);
     return { id: doc.id, ...doc.data() } as Usuario;
+  }
+
+  async findAssignableById(id: string): Promise<Usuario> {
+    const usuario = await this.findOne(id);
+    if (!usuario.activo || !isAssignableRole(usuario.rol)) {
+      throw new NotFoundException(`Usuario ${id} no elegible para asignación`);
+    }
+    return usuario;
   }
 
   async findByEmail(email: string): Promise<Usuario | null> {

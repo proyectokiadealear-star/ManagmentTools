@@ -3,6 +3,7 @@ import { Firestore } from 'firebase-admin/firestore';
 import { FirebaseService } from '../firebase/firebase.service';
 import { CatalogoInsumo, ConsumoInsumo, AnalisisAnomalia, NivelAnomalia } from './entities/insumo.entity';
 import { CreateCatalogoInsumoDto, UpdateCatalogoInsumoDto, RegistrarConsumoDto } from './dto/insumo.dto';
+import { UsuariosService } from '../usuarios/usuarios.service';
 
 /** Tolerancia de desviación: 20 % */
 const TOLERANCIA_DESVIACION = 0.2;
@@ -11,7 +12,10 @@ const TOLERANCIA_DESVIACION = 0.2;
 export class InsumosService {
   private readonly logger = new Logger(InsumosService.name);
 
-  constructor(private readonly firebaseService: FirebaseService) {}
+  constructor(
+    private readonly firebaseService: FirebaseService,
+    private readonly usuariosService: UsuariosService,
+  ) {}
 
   private get firestore(): Firestore {
     return this.firebaseService.getFirestore();
@@ -52,6 +56,11 @@ export class InsumosService {
   // ═══════════════════════════════════════════════════════════════════════════════
 
   async registrarConsumo(dto: RegistrarConsumoDto): Promise<ConsumoInsumo> {
+    const usuario = await this.usuariosService.findAssignableById(dto.tecnicoId).catch(() => null);
+    if (!usuario) {
+      throw new BadRequestException('Usuario no elegible para asignación de insumos/EPP');
+    }
+
     const insumo = await this.findOneCatalogo(dto.insumoId);
 
     const cantidadEsperada = insumo.consumoPromedioPorOT;
@@ -82,7 +91,7 @@ export class InsumosService {
       justificacion: dto.justificacion,
       evidenciaUrl: dto.evidenciaUrl,
       tecnicoId: dto.tecnicoId,
-      tecnicoNombre: dto.tecnicoNombre,
+      tecnicoNombre: usuario.nombre,
       areaId: dto.areaId,
       fechaRegistro: new Date().toISOString(),
     };
