@@ -98,6 +98,7 @@ export class FallasService {
       fechaReporte: nowISO,
       tiempoDeteccionAReporte: Math.max(0, tiempoDeteccionAReporte),
       origen: 'correctiva',
+      urgencia: dto.urgencia ?? 'media',
     };
 
     const docRef = await this.firestore.collection('fallas').add(fallaData);
@@ -220,13 +221,14 @@ export class FallasService {
           activoNombre: 'Alineadora 3D HawkEye',
           descripcionSintomas: 'Sensor delantero con lecturas inconsistentes ±3mm',
           impactoOperativo: 'No se pueden realizar alineaciones — servicio detenido',
+          urgencia: 'critica',
           reportadoPor: 'user-003',
           reportadoPorNombre: 'Miguel Sánchez',
           fechaDeteccion: '2025-02-05',
           fechaReporte: fechaAnterior,
           estado: 'reparada',
           decision: 'reparar_inmediato',
-          tiempoRespuestaGerencia: 45,
+          tiempoReporteARespuestaGerencia: 45,
           tiempoTotalParada: 480,
           costoFalla: 950,
           causaRaiz: 'Desgaste de sensor por vibración excesiva',
@@ -242,6 +244,7 @@ export class FallasService {
           activoNombre: 'Scanner Automotriz GDS',
           descripcionSintomas: 'No conecta con módulo de transmisión en Sportage 2024',
           impactoOperativo: 'Diagnóstico de transmisión no disponible para este modelo',
+          urgencia: 'media',
           reportadoPor: 'user-002',
           reportadoPorNombre: 'Ana Torres',
           fechaDeteccion: '2025-02-08',

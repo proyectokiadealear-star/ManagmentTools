@@ -368,8 +368,8 @@ export class DashboardService {
         countParada += 1;
       }
       totalCostoFallas += f.costoFalla ?? 0;
-      if (f.tiempoRespuestaGerencia != null) {
-        const horas = f.tiempoRespuestaGerencia / 60; // stored in minutes → hours
+      if (f.tiempoReporteARespuestaGerencia != null) {
+        const horas = f.tiempoReporteARespuestaGerencia / 60; // stored in minutes → hours
         sumaRespuestaGerencia += horas;
         countRespuesta += 1;
         if (horas > maxRespuesta) maxRespuesta = horas;

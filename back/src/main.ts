@@ -24,9 +24,7 @@ async function bootstrap() {
       'https://managment-tools-six.vercel.app',
       // Cualquier preview deploy de Vercel
       /\.vercel\.app$/,
-      // Variable de entorno como fallback adicional
-      process.env.FRONTEND_URL,
-    ].filter(Boolean) as (string | RegExp)[],
+    ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
