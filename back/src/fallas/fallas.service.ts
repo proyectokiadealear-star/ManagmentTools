@@ -11,6 +11,8 @@ export interface MetricasFallas {
   promedioTiempoRespuestaGerencia: number;
   promedioTiempoTotalParada: number;
   totalCostoFallas: number;
+  fallasPorTipo: Record<string, number>;
+  fallasCriticas: number;
 }
 
 @Injectable()
@@ -21,6 +23,42 @@ export class FallasService {
 
   private get firestore(): Firestore {
     return this.firebaseService.getFirestore();
+  }
+
+  /**
+   * Genera código único de falla: FALLA-2024-089
+   */
+  private generarCodigoFalla(año: number, numeroSecuencial: number): string {
+    const numeroFormateado = String(numeroSecuencial).padStart(3, '0');
+    return `FALLA-${año}-${numeroFormateado}`;
+  }
+
+  /**
+   * Obtiene el siguiente número de secuencia para el código de falla
+   */
+  private async getSiguienteNumeroSecuencial(): Promise<number> {
+    const añoActual = new Date().getFullYear();
+    const snapshot = await this.firestore.collection('fallas')
+      .where('codigoFalla', '>=', `FALLA-${añoActual}-000`)
+      .where('codigoFalla', '<=', `FALLA-${añoActual}-999`)
+      .get();
+    
+    if (snapshot.empty) {
+      return 1;
+    }
+    
+    let maxNum = 0;
+    for (const doc of snapshot.docs) {
+      const codigo = doc.data()['codigoFalla'];
+      if (codigo) {
+        const match = codigo.match(/FALLA-\d{4}-(\d+)/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (num > maxNum) maxNum = num;
+        }
+      }
+    }
+    return maxNum + 1;
   }
 
   async findAll(estado?: string): Promise<Falla[]> {
@@ -41,11 +79,25 @@ export class FallasService {
   }
 
   async create(dto: CreateFallaDto): Promise<Falla> {
-    const now = new Date().toISOString();
+    const now = new Date();
+    const nowISO = now.toISOString();
+    const añoActual = now.getFullYear();
+    const siguienteNumero = await this.getSiguienteNumeroSecuencial();
+    const codigoFalla = this.generarCodigoFalla(añoActual, siguienteNumero);
+
+    // Calcular tiempo de detección a reporte (minutos)
+    const fechaDeteccion = dto.fechaDeteccion && dto.horaDeteccion 
+      ? new Date(`${dto.fechaDeteccion}T${dto.horaDeteccion}:00`)
+      : new Date(dto.fechaDeteccion || nowISO);
+    const tiempoDeteccionAReporte = Math.round((now.getTime() - fechaDeteccion.getTime()) / 60000);
+
     const fallaData: Omit<Falla, 'id'> = {
       ...dto,
+      codigoFalla,
       estado: 'reportada',
-      fechaReporte: now,
+      fechaReporte: nowISO,
+      tiempoDeteccionAReporte: Math.max(0, tiempoDeteccionAReporte),
+      origen: 'correctiva',
     };
 
     const docRef = await this.firestore.collection('fallas').add(fallaData);
@@ -62,11 +114,36 @@ export class FallasService {
       updateData.fechaCierre = new Date().toISOString();
     }
 
-    // Calculate tiempoRespuestaGerencia when decision is set
-    if (dto.decision && !existente.decision && existente.fechaReporte) {
+    // Calculate tiempoReporteARespuestaGerencia when fechaRespuestaGerencia is set
+    if (dto.fechaRespuestaGerencia && !existente.fechaRespuestaGerencia && existente.fechaReporte) {
       const fechaReporte = new Date(existente.fechaReporte).getTime();
-      const ahora = Date.now();
-      updateData.tiempoRespuestaGerencia = Math.round((ahora - fechaReporte) / 60000); // minutes
+      const fechaRespuesta = new Date(dto.fechaRespuestaGerencia).getTime();
+      updateData.tiempoReporteARespuestaGerencia = Math.round((fechaRespuesta - fechaReporte) / 60000);
+      
+      // Verificar SLA: respuesta gerencia < 2 horas (120 minutos)
+      updateData.slaCumple = updateData.tiempoReporteARespuestaGerencia <= 120;
+    }
+
+    // Calcular tiempo total de parada cuando se cierra
+    if (dto.estado === 'reparada' && dto.fechaReparacion && existente.fechaDeteccion) {
+      const fechaDeteccion = new Date(existente.fechaDeteccion).getTime();
+      const fechaReparacion = new Date(dto.fechaReparacion).getTime();
+      updateData.tiempoTotalParada = Math.round((fechaReparacion - fechaDeteccion) / 60000);
+    }
+
+    // Calcular costo total si hay repuestos y/o mano de obra
+    if ((dto.costoRepuestos !== undefined || dto.costoManoObra !== undefined) && existente) {
+      const repuestos = dto.costoRepuestos ?? existente.costoRepuestos ?? 0;
+      const manoObra = dto.costoManoObra ?? existente.costoManoObra ?? 0;
+      updateData.costoTotal = repuestos + manoObra;
+      updateData.costoFalla = repuestos + manoObra;
+    }
+
+    // Calcular tiempo de reparación si hay fecha inicio y fecha reparación
+    if (dto.fechaReparacion && dto.fechaInicioReparacion && !existente.tiempoReparacion) {
+      const inicio = new Date(dto.fechaInicioReparacion).getTime();
+      const fin = new Date(dto.fechaReparacion).getTime();
+      updateData.tiempoReparacion = Math.round((fin - inicio) / 60000);
     }
 
     await this.firestore.collection('fallas').doc(id).update(updateData);
@@ -77,17 +154,27 @@ export class FallasService {
     const fallas = await this.findAll();
 
     const porEstado: Record<string, number> = {};
+    const fallasPorTipo: Record<string, number> = {};
     let sumaTiempoRespuesta = 0;
     let countTiempoRespuesta = 0;
     let sumaTiempoParada = 0;
     let countTiempoParada = 0;
     let totalCosto = 0;
+    let fallasCriticas = 0;
 
     for (const f of fallas) {
       porEstado[f.estado] = (porEstado[f.estado] || 0) + 1;
 
-      if (f.tiempoRespuestaGerencia != null) {
-        sumaTiempoRespuesta += f.tiempoRespuestaGerencia;
+      if (f.tipoFalla) {
+        fallasPorTipo[f.tipoFalla] = (fallasPorTipo[f.tipoFalla] || 0) + 1;
+      }
+
+      if (f.urgencia === 'critica') {
+        fallasCriticas++;
+      }
+
+      if (f.tiempoReporteARespuestaGerencia != null) {
+        sumaTiempoRespuesta += f.tiempoReporteARespuestaGerencia;
         countTiempoRespuesta++;
       }
       if (f.tiempoTotalParada != null) {
@@ -107,6 +194,8 @@ export class FallasService {
       promedioTiempoTotalParada:
         countTiempoParada > 0 ? Math.round(sumaTiempoParada / countTiempoParada) : 0,
       totalCostoFallas: totalCosto,
+      fallasPorTipo,
+      fallasCriticas,
     };
   }
 

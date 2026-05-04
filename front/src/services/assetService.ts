@@ -423,3 +423,139 @@ export function invalidateLocationNamesCache(): void {
   _locationNamesCache = null;
   _locationNamesPromise = null;
 }
+
+// ==================== FALLAS CORRECTIVAS ====================
+
+export type EstadoFalla = 'reportada' | 'evaluando' | 'en_reparacion' | 'reparada' | 'descartada';
+export type DecisionFalla = 'reparar_inmediato' | 'cotizar' | 'reemplazar';
+export type UrgenciaFalla = 'critica' | 'alta' | 'media' | 'baja';
+export type TipoFalla = 'electrica' | 'mecanica' | 'hidraulica' | 'neumática' | 'estructural' | 'software' | 'otro';
+
+export interface FallaCorrectiva {
+  id: string;
+  codigoFalla?: string;
+  activoId: string;
+  activoNombre: string;
+  activoCodigo?: string;
+  activoPlaca?: string;
+  descripcionSintomas: string;
+  fotografiaUrls?: string[];
+  impactoOperativo: string;
+  urgencia: UrgenciaFalla;
+  tipoFalla?: TipoFalla;
+  reportadoPor: string;
+  reportadoPorNombre: string;
+  fechaDeteccion: string;
+  horaDeteccion?: string;
+  fechaReporte: string;
+  estado: EstadoFalla;
+  decision?: DecisionFalla;
+  cotizacionId?: string;
+  
+  // Tiempos de respuesta (minutos)
+  tiempoDeteccionAReporte?: number;
+  tiempoReporteARespuestaGerencia?: number;
+  tiempoRespuestaAInicioReparacion?: number;
+  tiempoTotalParada?: number;
+  
+  // Respuesta de gerencia
+  respuestaGerencia?: string;
+  fechaRespuestaGerencia?: string;
+  slaCumple?: boolean;
+  
+  // Costos
+  costoRepuestos?: number;
+  costoManoObra?: number;
+  costoFalla?: number;
+  costoTotal?: number;
+  
+  // Reparación
+  causaRaiz?: string;
+  accionCorrectiva?: string;
+  evidenciaPostUrl?: string;
+  evidenciaPostUrls?: string[];
+  reparadoPor?: string;
+  tiempoReparacion?: number;
+  fechaReparacion?: string;
+  fechaInicioReparacion?: string;
+  fechaCierre?: string;
+  
+  // Análisis
+  tipoFallaRepetida?: boolean;
+  sugerenciaPreventiva?: string;
+  origen?: 'correctiva' | 'preventiva';
+}
+
+export interface CreateFallaDto {
+  activoId: string;
+  activoNombre: string;
+  activoCodigo?: string;
+  activoPlaca?: string;
+  descripcionSintomas: string;
+  fotografiaUrls?: string[];
+  impactoOperativo: string;
+  urgencia?: UrgenciaFalla;
+  tipoFalla?: TipoFalla;
+  reportadoPor: string;
+  reportadoPorNombre: string;
+  fechaDeteccion: string;
+  horaDeteccion?: string;
+}
+
+export interface UpdateFallaDto {
+  estado?: EstadoFalla;
+  decision?: DecisionFalla;
+  cotizacionId?: string;
+  tiempoDeteccionAReporte?: number;
+  tiempoReporteARespuestaGerencia?: number;
+  tiempoRespuestaAInicioReparacion?: number;
+  tiempoTotalParada?: number;
+  respuestaGerencia?: string;
+  fechaRespuestaGerencia?: string;
+  slaCumple?: boolean;
+  costoRepuestos?: number;
+  costoManoObra?: number;
+  costoFalla?: number;
+  causaRaiz?: string;
+  accionCorrectiva?: string;
+  evidenciaPostUrl?: string;
+  evidenciaPostUrls?: string[];
+  reparadoPor?: string;
+  tiempoReparacion?: number;
+  fechaInicioReparacion?: string;
+  fechaReparacion?: string;
+  fechaCierre?: string;
+  tipoFallaRepetida?: boolean;
+  sugerenciaPreventiva?: string;
+}
+
+export interface MetricasFallas {
+  totalFallas: number;
+  porEstado: Record<string, number>;
+  promedioTiempoRespuestaGerencia: number;
+  promedioTiempoTotalParada: number;
+  totalCostoFallas: number;
+  fallasPorTipo: Record<string, number>;
+  fallasCriticas: number;
+}
+
+export async function getFallas(estado?: string): Promise<FallaCorrectiva[]> {
+  const query = estado ? `?estado=${estado}` : '';
+  return httpClient.get<FallaCorrectiva[]>(`/api/fallas${query}`);
+}
+
+export async function getFallaById(id: string): Promise<FallaCorrectiva> {
+  return httpClient.get<FallaCorrectiva>(`/api/fallas/${id}`);
+}
+
+export async function createFalla(data: CreateFallaDto): Promise<FallaCorrectiva> {
+  return httpClient.post<FallaCorrectiva>('/api/fallas', data);
+}
+
+export async function updateFalla(id: string, data: UpdateFallaDto): Promise<FallaCorrectiva> {
+  return httpClient.patch<FallaCorrectiva>(`/api/fallas/${id}`, data);
+}
+
+export async function getMetricasFallas(): Promise<MetricasFallas> {
+  return httpClient.get<MetricasFallas>('/api/fallas/metricas');
+}

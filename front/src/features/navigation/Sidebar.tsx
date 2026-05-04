@@ -26,6 +26,7 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
+  AlertTriangle,
   type LucideIcon,
 } from 'lucide-react';
 import { useRole } from '@shared/context/AssetContext';
@@ -79,6 +80,7 @@ const navigation: NavEntry[] = [
       { path: '/responsabilidades', label: 'Responsables', icon: UserCheck, roles: ['jefe'] },
       { path: '/depreciation', label: 'Finanzas / Depreciación', icon: TrendingDown, roles: ['jefe'] },
       { path: '/repair-vs-replace', label: 'Reparar vs. Reemplazar', icon: Hammer, roles: ['tecnico', 'jefe'] },
+      { path: '/corrective-failures', label: 'Fallas Correctivas', icon: AlertTriangle, roles: ['tecnico', 'jefe'] },
     ],
   },
 

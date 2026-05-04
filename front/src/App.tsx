@@ -12,6 +12,7 @@ import { Custody } from '@features/asset-management/Custody';
 import { Depreciation } from '@features/finance/Depreciation';
 import { MaintenancePlanning } from '@features/maintenance/MaintenancePlanning';
 import { RepairVsReplace } from '@features/finance/RepairVsReplace';
+import { CorrectiveFailuresView } from '@features/asset-management/CorrectiveFailuresView';
 import { ToolLoans } from '@features/tool-management/ToolLoans';
 import { ToolInspections } from '@features/tool-management/ToolInspections';
 import { ToolDevolution } from '@features/tool-management/ToolDevolution';
@@ -81,6 +82,7 @@ function MainLayout() {
           <Route path="/depreciation" element={<Depreciation />} />
           <Route path="/maintenance" element={<MaintenancePlanning />} />
           <Route path="/repair-vs-replace" element={<RepairVsReplace />} />
+          <Route path="/corrective-failures" element={<CorrectiveFailuresView />} />
         </Routes>
       </main>
     </div>
