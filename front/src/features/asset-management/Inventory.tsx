@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, Eye, MapPin, Plus, Edit, Trash2, LayoutList, LayoutGrid, Wrench, CheckCircle, XCircle, FileDown } from 'lucide-react';
+import { Search, Eye, MapPin, Plus, Edit, Trash2, LayoutList, LayoutGrid, Wrench, CheckCircle, XCircle, FileDown } from 'lucide-react';
 import { Asset } from '../../data/mockData';
 import { AssetDetailModal } from './AssetDetailModal';
 import { AssetFormModal } from './AssetFormModal';
@@ -182,10 +182,6 @@ export function Inventory() {
             </button>
           </div>
 
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors text-sm font-medium shadow-sm">
-            <Filter size={16} />
-            Filtros
-          </button>
           <button
             onClick={handleOpenNewAsset}
             className="flex items-center gap-2 px-4 py-2 bg-amber-600 border border-transparent rounded-lg text-white hover:bg-amber-700 transition-colors text-sm font-medium shadow-sm">

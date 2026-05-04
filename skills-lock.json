@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "kpi-dashboard-design": {
+      "source": "aj-geddes/useful-ai-prompts",
+      "sourceType": "github",
+      "skillPath": "skills/kpi-dashboard-design/SKILL.md",
+      "computedHash": "288b9a6a0458f64a68ec31a838d2b287c28f22efe79cc7bd5b50fc03e895a082"
+    }
+  }
+}
