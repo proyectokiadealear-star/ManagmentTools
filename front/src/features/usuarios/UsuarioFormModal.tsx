@@ -15,6 +15,7 @@ import {
   AREAS_OPTIONS,
   SEDES_OPTIONS,
 } from '@shared/types/enums';
+import { getAreas, AreaAPI } from '../../services/assetService';
 
 interface Props {
   isOpen: boolean;
@@ -49,6 +50,7 @@ export function UsuarioFormModal({ isOpen, usuario, onClose, onSaved }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [areasFromAPI, setAreasFromAPI] = useState<AreaAPI[]>([]);
 
   // Cuando se abre el modal, cargar datos del usuario a editar (o limpiar)
   useEffect(() => {
@@ -56,6 +58,7 @@ export function UsuarioFormModal({ isOpen, usuario, onClose, onSaved }: Props) {
       setError(null);
       setGeneratedPassword(null);
       setCopied(false);
+      getAreas().then(setAreasFromAPI).catch(() => {});
       if (usuario) {
         setForm({
           nombre:  usuario.nombre,
@@ -121,6 +124,11 @@ export function UsuarioFormModal({ isOpen, usuario, onClose, onSaved }: Props) {
       setLoading(false);
     }
   };
+
+  const sedeAreas = areasFromAPI.filter(a => !a.sede || a.sede === form.sede);
+  const areaOptions = sedeAreas.length > 0
+    ? sedeAreas.map(a => ({ value: a.tipo ?? a.nombre, label: a.nombre }))
+    : AREAS_OPTIONS;
 
   // Vista de "contraseña generada" — se muestra después de crear el usuario
   if (generatedPassword) {
@@ -323,7 +331,12 @@ export function UsuarioFormModal({ isOpen, usuario, onClose, onSaved }: Props) {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Sede</label>
                   <select
                     value={form.sede}
-                    onChange={(e) => set('sede', e.target.value as Sede)}
+                    onChange={(e) => {
+                      const newSede = e.target.value as Sede;
+                      set('sede', newSede);
+                      const first = areasFromAPI.find(a => !a.sede || a.sede === newSede);
+                      if (first) set('area', (first.tipo ?? first.nombre) as AreaTaller);
+                    }}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
                   >
                     {SEDES_OPTIONS.map((o) => (
@@ -338,7 +351,7 @@ export function UsuarioFormModal({ isOpen, usuario, onClose, onSaved }: Props) {
                     onChange={(e) => set('area', e.target.value as AreaTaller)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
                   >
-                    {AREAS_OPTIONS.map((o) => (
+                    {areaOptions.map((o) => (
                       <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
