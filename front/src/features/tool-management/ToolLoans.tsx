@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   ClipboardList,
   CheckCircle2,
@@ -13,22 +13,20 @@ import {
   Package,
   CalendarClock,
   FileSignature,
+  RefreshCw,
 } from 'lucide-react';
 import { useAssets, useRole } from '@shared/context/AssetContext';
+import { useAuth } from '@shared/context/AuthContext';
 import {
   SolicitudPrestamo,
   EstadoSolicitudPrestamo,
 } from '../../data/mockData';
-import { getPrestamos } from '../../services/toolService';
-
-const PERSONAL_OPTIONS = [
-  'Pedro Alvarado',
-  'Juan Morales',
-  'Roberto Gómez',
-  'Ana Torres',
-  'Miguel Sánchez',
-  'Luis Pérez',
-];
+import {
+  getPrestamos,
+  createPrestamo,
+  aprobarPrestamo,
+  rechazarPrestamo,
+} from '../../services/toolService';
 
 const estadoBadge: Record<EstadoSolicitudPrestamo, { label: string; cls: string; icon: React.ReactNode }> = {
   Pendiente: { label: 'Pendiente', cls: 'bg-amber-100 text-amber-800 border-amber-200', icon: <Clock size={12} /> },
@@ -41,31 +39,51 @@ const estadoBadge: Record<EstadoSolicitudPrestamo, { label: string; cls: string;
 export function ToolLoans() {
   const assets = useAssets();
   const role = useRole();
+  const { user } = useAuth();
+
   const [prestamos, setPrestamos] = useState<SolicitudPrestamo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
-  useEffect(() => {
-    getPrestamos().then((data) => {
-      setPrestamos(data);
-      setLoading(false);
-    });
-  }, []);
   const [search, setSearch] = useState('');
   const [filterEstado, setFilterEstado] = useState<EstadoSolicitudPrestamo | 'Todos'>('Todos');
   const [showSolicitudModal, setShowSolicitudModal] = useState(false);
   const [showAprobacionModal, setShowAprobacionModal] = useState<SolicitudPrestamo | null>(null);
-  const [showHistorialModal, setShowHistorialModal] = useState<string | null>(null); // assetId
+  const [showHistorialModal, setShowHistorialModal] = useState<string | null>(null);
 
   // Formulario nueva solicitud (F8.1)
   const [formSolicitud, setFormSolicitud] = useState({
     assetId: '',
     ordenTrabajo: '',
     motivoUso: '',
-    fechaDevolucionEstimada: '',
+    tiempoEstimadoHoras: '',
   });
 
   // Formulario aprobación (F8.2)
   const [formAprobacion, setFormAprobacion] = useState({ aprobar: true, motivoRechazo: '' });
+
+  const reloadPrestamos = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getPrestamos();
+      setPrestamos(data);
+    } catch {
+      setErrorMsg('Error al cargar los préstamos. Verifica la conexión al servidor.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    reloadPrestamos();
+  }, [reloadPrestamos]);
+
+  const showSuccess = (msg: string) => {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
 
   const filtered = prestamos.filter((p) => {
     const matchSearch =
@@ -80,55 +98,70 @@ export function ToolLoans() {
   const enUso = prestamos.filter((p) => p.estado === 'Aprobado').length;
   const vencidos = prestamos.filter((p) => p.estado === 'Vencido').length;
 
-  const handleCrearSolicitud = () => {
-    if (!formSolicitud.assetId || !formSolicitud.ordenTrabajo || !formSolicitud.motivoUso || !formSolicitud.fechaDevolucionEstimada) return;
+  const handleCrearSolicitud = async () => {
+    const horas = Number(formSolicitud.tiempoEstimadoHoras);
+    if (
+      !formSolicitud.assetId ||
+      !formSolicitud.ordenTrabajo ||
+      !formSolicitud.motivoUso ||
+      !horas || horas <= 0
+    ) return;
+    if (!user) return;
+
     const asset = assets.find((a) => a.id === formSolicitud.assetId);
-    const nuevaSolicitud: SolicitudPrestamo = {
-      id: `PR-${String(prestamos.length + 1).padStart(3, '0')}`,
-      assetId: formSolicitud.assetId,
-      assetDescripcion: asset?.descripcion ?? '',
-      assetPlaca: asset?.placa ?? '',
-      solicitante: role === 'personal' ? 'Pedro Alvarado' : 'Carlos Mendoza',
-      ordenTrabajo: formSolicitud.ordenTrabajo,
-      motivoUso: formSolicitud.motivoUso,
-      fechaSolicitud: new Date().toISOString(),
-      fechaDevolucionEstimada: formSolicitud.fechaDevolucionEstimada,
-      estado: 'Pendiente',
-    };
-    setPrestamos((prev) => [nuevaSolicitud, ...prev]);
-    setFormSolicitud({ assetId: '', ordenTrabajo: '', motivoUso: '', fechaDevolucionEstimada: '' });
-    setShowSolicitudModal(false);
+    if (!asset) return;
+
+    setSubmitting(true);
+    setErrorMsg('');
+    try {
+      await createPrestamo({
+        herramientaId: formSolicitud.assetId,
+        herramientaNombre: asset.descripcion,
+        herramientaPlaca: asset.placa,
+        solicitanteId: user.uid,
+        solicitanteNombre: user.nombre,
+        ordenTrabajo: formSolicitud.ordenTrabajo,
+        motivo: formSolicitud.motivoUso,
+        tiempoEstimadoHoras: horas,
+      });
+      setFormSolicitud({ assetId: '', ordenTrabajo: '', motivoUso: '', tiempoEstimadoHoras: '' });
+      setShowSolicitudModal(false);
+      showSuccess('Solicitud enviada correctamente. Pendiente de aprobación.');
+      await reloadPrestamos();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al enviar la solicitud';
+      setErrorMsg(msg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleAprobar = (prestamo: SolicitudPrestamo) => {
-    const now = new Date().toISOString();
-    const aprobadoPor = 'Carlos Mendoza';
-    if (formAprobacion.aprobar) {
-      setPrestamos((prev) =>
-        prev.map((p) =>
-          p.id === prestamo.id
-            ? {
-                ...p,
-                estado: 'Aprobado',
-                fechaAprobacion: now,
-                aprobadoPor,
-                firmaDigital: `${aprobadoPor} — ${now.slice(0, 16).replace('T', ' ')}`,
-                fechaSalida: now,
-              }
-            : p
-        )
-      );
-    } else {
-      setPrestamos((prev) =>
-        prev.map((p) =>
-          p.id === prestamo.id
-            ? { ...p, estado: 'Rechazado', motivoRechazo: formAprobacion.motivoRechazo }
-            : p
-        )
-      );
+  const handleAprobar = async (prestamo: SolicitudPrestamo) => {
+    if (!user) return;
+    setSubmitting(true);
+    setErrorMsg('');
+    try {
+      if (formAprobacion.aprobar) {
+        await aprobarPrestamo(prestamo.id, user.uid, user.nombre);
+        showSuccess('Solicitud aprobada con firma digital registrada.');
+      } else {
+        await rechazarPrestamo(
+          prestamo.id,
+          user.uid,
+          user.nombre,
+          formAprobacion.motivoRechazo || undefined,
+        );
+        showSuccess('Solicitud rechazada.');
+      }
+      setShowAprobacionModal(null);
+      setFormAprobacion({ aprobar: true, motivoRechazo: '' });
+      await reloadPrestamos();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al procesar la solicitud';
+      setErrorMsg(msg);
+    } finally {
+      setSubmitting(false);
     }
-    setShowAprobacionModal(null);
-    setFormAprobacion({ aprobar: true, motivoRechazo: '' });
   };
 
   const historialAsset = showHistorialModal
@@ -138,7 +171,13 @@ export function ToolLoans() {
     ? assets.find((a) => a.id === showHistorialModal)?.descripcion ?? ''
     : '';
 
-  if (loading) {
+  const solicitudFormValida =
+    !!formSolicitud.assetId &&
+    !!formSolicitud.ordenTrabajo &&
+    !!formSolicitud.motivoUso &&
+    Number(formSolicitud.tiempoEstimadoHoras) > 0;
+
+  if (loading && prestamos.length === 0) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="animate-spin rounded-full h-10 w-10 border-4 border-amber-500 border-t-transparent" />
@@ -148,6 +187,30 @@ export function ToolLoans() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Notificación de éxito */}
+      {successMsg && (
+        <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl px-4 py-3 text-sm font-medium animate-pulse">
+          <CheckCircle2 size={16} className="shrink-0" />
+          {successMsg}
+        </div>
+      )}
+
+      {/* Notificación de error global */}
+      {errorMsg && !showSolicitudModal && !showAprobacionModal && (
+        <div className="flex items-center justify-between gap-3 bg-red-50 border border-red-200 text-red-800 rounded-xl px-4 py-3 text-sm">
+          <div className="flex items-center gap-2">
+            <XCircle size={16} className="shrink-0" />
+            {errorMsg}
+          </div>
+          <button
+            onClick={() => { setErrorMsg(''); reloadPrestamos(); }}
+            className="flex items-center gap-1 text-xs font-semibold hover:underline"
+          >
+            <RefreshCw size={12} /> Reintentar
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -159,15 +222,25 @@ export function ToolLoans() {
             Trazabilidad completa de herramientas prestadas · F8.1 · F8.2 · F8.3 · F8.4
           </p>
         </div>
-        {(role === 'personal' || role === 'tecnico') && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowSolicitudModal(true)}
-            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors text-sm"
+            onClick={() => reloadPrestamos()}
+            disabled={loading}
+            className="flex items-center gap-1 text-slate-500 hover:text-slate-700 text-xs px-3 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
           >
-            <Plus size={16} />
-            Nueva Solicitud (F8.1)
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            Actualizar
           </button>
-        )}
+          {(role === 'personal' || role === 'tecnico') && (
+            <button
+              onClick={() => setShowSolicitudModal(true)}
+              className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors text-sm"
+            >
+              <Plus size={16} />
+              Nueva Solicitud (F8.1)
+            </button>
+          )}
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -239,7 +312,13 @@ export function ToolLoans() {
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
-                  No hay solicitudes registradas.
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <RefreshCw size={14} className="animate-spin" /> Cargando...
+                    </span>
+                  ) : (
+                    'No hay solicitudes registradas.'
+                  )}
                 </td>
               </tr>
             ) : (
@@ -266,10 +345,10 @@ export function ToolLoans() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-slate-600">
-                      {p.fechaDevolucionEstimada}
+                      {p.fechaDevolucionEstimada ? p.fechaDevolucionEstimada.slice(0, 10) : '—'}
                       {p.fechaDevolucionReal && (
                         <p className="text-xs text-emerald-600">
-                          Real: {p.fechaDevolucionReal.slice(11, 16)}
+                          Real: {p.fechaDevolucionReal.slice(0, 10)}
                         </p>
                       )}
                     </td>
@@ -292,7 +371,7 @@ export function ToolLoans() {
                         {/* F8.2 Aprobación — solo tecnico/jefe y si está Pendiente */}
                         {(role === 'tecnico' || role === 'jefe') && p.estado === 'Pendiente' && (
                           <button
-                            onClick={() => setShowAprobacionModal(p)}
+                            onClick={() => { setErrorMsg(''); setShowAprobacionModal(p); }}
                             className="flex items-center gap-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs px-2 py-1.5 rounded-lg transition-colors font-medium"
                           >
                             <Pen size={12} />
@@ -300,7 +379,7 @@ export function ToolLoans() {
                           </button>
                         )}
                         {/* F8.4 Historial por herramienta */}
-                        {(role === 'jefe') && (
+                        {role === 'jefe' && (
                           <button
                             onClick={() => setShowHistorialModal(p.assetId)}
                             className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-2 py-1.5 rounded-lg transition-colors font-medium"
@@ -339,11 +418,23 @@ export function ToolLoans() {
                 <Plus className="text-amber-500" size={20} />
                 Solicitar Herramienta — F8.1
               </h2>
-              <p className="text-xs text-slate-500 mt-1">Portal de solicitud · Pendiente de aprobación del Técnico Líder</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Solicitante: <strong>{user?.nombre}</strong> · Pendiente de aprobación del Técnico Líder
+              </p>
             </div>
+
+            {errorMsg && (
+              <div className="mx-6 mt-4 flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-xs">
+                <XCircle size={14} />
+                {errorMsg}
+              </div>
+            )}
+
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Herramienta / Activo *</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Herramienta / Activo *
+                </label>
                 <select
                   value={formSolicitud.assetId}
                   onChange={(e) => setFormSolicitud((f) => ({ ...f, assetId: e.target.value }))}
@@ -358,7 +449,9 @@ export function ToolLoans() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Orden de Trabajo (OT) *</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Orden de Trabajo (OT) *
+                </label>
                 <input
                   type="text"
                   placeholder="Ej: OT-2025-0250"
@@ -368,7 +461,9 @@ export function ToolLoans() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Motivo de Uso *</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Motivo de Uso *
+                </label>
                 <textarea
                   rows={3}
                   placeholder="Describe para qué necesitas esta herramienta..."
@@ -378,27 +473,47 @@ export function ToolLoans() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Fecha Estimada de Devolución *</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Tiempo Estimado de Uso (horas) *
+                </label>
                 <input
-                  type="date"
-                  value={formSolicitud.fechaDevolucionEstimada}
-                  onChange={(e) => setFormSolicitud((f) => ({ ...f, fechaDevolucionEstimada: e.target.value }))}
+                  type="number"
+                  min="1"
+                  max="720"
+                  placeholder="Ej: 4"
+                  value={formSolicitud.tiempoEstimadoHoras}
+                  onChange={(e) =>
+                    setFormSolicitud((f) => ({ ...f, tiempoEstimadoHoras: e.target.value }))
+                  }
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
                 />
+                <p className="text-xs text-slate-400 mt-1">
+                  La fecha estimada de devolución se calcula automáticamente.
+                </p>
               </div>
             </div>
+
             <div className="p-6 border-t border-slate-100 flex justify-end gap-3">
               <button
-                onClick={() => setShowSolicitudModal(false)}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                onClick={() => { setShowSolicitudModal(false); setErrorMsg(''); }}
+                disabled={submitting}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleCrearSolicitud}
-                className="px-4 py-2 text-sm bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg transition-colors"
+                disabled={submitting || !solicitudFormValida}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Enviar Solicitud
+                {submitting ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  'Enviar Solicitud'
+                )}
               </button>
             </div>
           </div>
@@ -415,6 +530,14 @@ export function ToolLoans() {
                 Aprobar / Rechazar Solicitud — F8.2
               </h2>
             </div>
+
+            {errorMsg && (
+              <div className="mx-6 mt-4 flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-xs">
+                <XCircle size={14} />
+                {errorMsg}
+              </div>
+            )}
+
             <div className="p-6 space-y-4">
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-2 text-sm">
                 <div className="flex items-center gap-2">
@@ -424,14 +547,19 @@ export function ToolLoans() {
                 </div>
                 <div className="flex items-center gap-2">
                   <User size={14} className="text-slate-500" />
-                  <span>Solicitante: <strong>{showAprobacionModal.solicitante}</strong></span>
+                  <span>
+                    Solicitante: <strong>{showAprobacionModal.solicitante}</strong>
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CalendarClock size={14} className="text-slate-500" />
-                  <span>OT: <strong>{showAprobacionModal.ordenTrabajo}</strong></span>
+                  <span>
+                    OT: <strong>{showAprobacionModal.ordenTrabajo}</strong>
+                  </span>
                 </div>
                 <p className="text-slate-600 italic">"{showAprobacionModal.motivoUso}"</p>
               </div>
+
               <div className="flex gap-3">
                 <button
                   onClick={() => setFormAprobacion((f) => ({ ...f, aprobar: true }))}
@@ -456,39 +584,59 @@ export function ToolLoans() {
                   Rechazar
                 </button>
               </div>
+
               {!formAprobacion.aprobar && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Motivo de Rechazo</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    Motivo de Rechazo
+                  </label>
                   <textarea
                     rows={3}
                     placeholder="Explica el motivo del rechazo..."
                     value={formAprobacion.motivoRechazo}
-                    onChange={(e) => setFormAprobacion((f) => ({ ...f, motivoRechazo: e.target.value }))}
+                    onChange={(e) =>
+                      setFormAprobacion((f) => ({ ...f, motivoRechazo: e.target.value }))
+                    }
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
                   />
                 </div>
               )}
+
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
                 <span className="font-semibold">Firma Digital: </span>
-                Se registrará automáticamente — <strong>Carlos Mendoza</strong> · {new Date().toLocaleString('es-EC')}
+                Se registrará automáticamente —{' '}
+                <strong>{user?.nombre ?? '—'}</strong> ·{' '}
+                {new Date().toLocaleString('es-EC')}
               </div>
             </div>
+
             <div className="p-6 border-t border-slate-100 flex justify-end gap-3">
               <button
-                onClick={() => setShowAprobacionModal(null)}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                onClick={() => { setShowAprobacionModal(null); setErrorMsg(''); setFormAprobacion({ aprobar: true, motivoRechazo: '' }); }}
+                disabled={submitting}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 onClick={() => handleAprobar(showAprobacionModal)}
-                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors text-white ${
+                disabled={submitting}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors text-white disabled:opacity-50 disabled:cursor-not-allowed ${
                   formAprobacion.aprobar
                     ? 'bg-emerald-500 hover:bg-emerald-600'
                     : 'bg-red-500 hover:bg-red-600'
                 }`}
               >
-                {formAprobacion.aprobar ? 'Confirmar Aprobación' : 'Confirmar Rechazo'}
+                {submitting ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    Procesando...
+                  </>
+                ) : formAprobacion.aprobar ? (
+                  'Confirmar Aprobación'
+                ) : (
+                  'Confirmar Rechazo'
+                )}
               </button>
             </div>
           </div>
@@ -528,18 +676,43 @@ export function ToolLoans() {
                             <User size={14} className="text-slate-500" />
                             <span className="font-semibold text-slate-800">{p.solicitante}</span>
                           </div>
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${badge.cls}`}>
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${badge.cls}`}
+                          >
                             {badge.icon}
                             {badge.label}
                           </span>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-slate-600">
-                          <div><span className="text-slate-400">OT:</span> {p.ordenTrabajo}</div>
-                          <div><span className="text-slate-400">Solicitud:</span> {p.fechaSolicitud.slice(0, 16).replace('T', ' ')}</div>
-                          {p.fechaSalida && <div><span className="text-slate-400">Salida:</span> {p.fechaSalida.slice(11, 16)}</div>}
-                          {p.fechaDevolucionReal && <div><span className="text-slate-400">Devolución:</span> {p.fechaDevolucionReal.slice(11, 16)}</div>}
-                          {p.aprobadoPor && <div><span className="text-slate-400">Aprobó:</span> {p.aprobadoPor}</div>}
-                          {p.estadoDevolucion && <div><span className="text-slate-400">Estado devuelto:</span> {p.estadoDevolucion}</div>}
+                          <div>
+                            <span className="text-slate-400">OT:</span> {p.ordenTrabajo}
+                          </div>
+                          <div>
+                            <span className="text-slate-400">Solicitud:</span>{' '}
+                            {p.fechaSolicitud.slice(0, 16).replace('T', ' ')}
+                          </div>
+                          {p.fechaSalida && (
+                            <div>
+                              <span className="text-slate-400">Salida:</span>{' '}
+                              {p.fechaSalida.slice(0, 16).replace('T', ' ')}
+                            </div>
+                          )}
+                          {p.fechaDevolucionReal && (
+                            <div>
+                              <span className="text-slate-400">Devolución:</span>{' '}
+                              {p.fechaDevolucionReal.slice(0, 10)}
+                            </div>
+                          )}
+                          {p.aprobadoPor && (
+                            <div>
+                              <span className="text-slate-400">Aprobó:</span> {p.aprobadoPor}
+                            </div>
+                          )}
+                          {p.estadoDevolucion && (
+                            <div>
+                              <span className="text-slate-400">Condición:</span> {p.estadoDevolucion}
+                            </div>
+                          )}
                         </div>
                         <p className="text-slate-500 italic">"{p.motivoUso}"</p>
                       </div>
@@ -558,7 +731,6 @@ export function ToolLoans() {
         <span>🟨 <strong>Técnico Líder:</strong> Aprobar/rechazar con firma digital (F8.2), ver timestamps (F8.3)</span>
         <span>🟩 <strong>Jefe de Taller:</strong> Historial completo por herramienta (F8.4)</span>
       </div>
-      <div className="hidden">{PERSONAL_OPTIONS.join('')}</div>
     </div>
   );
 }

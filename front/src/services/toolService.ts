@@ -4,9 +4,110 @@ import { httpClient } from './httpClient';
 import {
   SolicitudPrestamo,
   EstadoSolicitudPrestamo,
+  EstadoDevolucion,
   InspeccionFotografica,
   ActaDevolucion,
 } from '../data/mockData';
+
+// ---------------------------------------------------------------------------
+// Backend entity type (matches NestJS Prestamo entity)
+// ---------------------------------------------------------------------------
+
+interface BackendPrestamo {
+  id: string;
+  herramientaId: string;
+  herramientaNombre: string;
+  herramientaPlaca: string;
+  solicitanteId: string;
+  solicitanteNombre: string;
+  ordenTrabajo: string;
+  motivo: string;
+  tiempoEstimadoHoras: number;
+  aprobadorId?: string;
+  aprobadorNombre?: string;
+  estado: 'pendiente' | 'aprobado' | 'en_uso' | 'devuelto' | 'devuelto_con_dano' | 'vencido' | 'rechazado';
+  fechaSolicitud: string;
+  fechaAprobacion?: string;
+  fechaRetiro?: string;
+  fechaDevolucionEstimada?: string;
+  fechaDevolucionReal?: string;
+  estadoDevolucion?: 'bueno' | 'regular' | 'danado';
+  observacionesDevolucion?: string;
+  fotografiaDanoUrl?: string;
+  tipoDano?: string;
+  costoReparacion?: number;
+  costoReposicion?: number;
+  sancion?: 'descuento_nomina' | 'reposicion' | 'reparacion_compartida';
+  montoSancion?: number;
+  fechaCierre?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Mappers — backend entity → frontend display model
+// ---------------------------------------------------------------------------
+
+function mapEstadoToFrontend(estado: BackendPrestamo['estado']): EstadoSolicitudPrestamo {
+  switch (estado) {
+    case 'pendiente': return 'Pendiente';
+    case 'aprobado':
+    case 'en_uso': return 'Aprobado';
+    case 'devuelto':
+    case 'devuelto_con_dano': return 'Devuelto';
+    case 'vencido': return 'Vencido';
+    case 'rechazado': return 'Rechazado';
+    default: return 'Pendiente';
+  }
+}
+
+function mapEstadoDevolucion(d?: BackendPrestamo['estadoDevolucion']): EstadoDevolucion | undefined {
+  if (!d) return undefined;
+  switch (d) {
+    case 'bueno': return 'Nueva';
+    case 'regular': return 'Usada Normal';
+    case 'danado': return 'Dañada';
+  }
+}
+
+function mapPrestamo(p: BackendPrestamo): SolicitudPrestamo {
+  return {
+    id: p.id,
+    assetId: p.herramientaId,
+    assetDescripcion: p.herramientaNombre,
+    assetPlaca: p.herramientaPlaca,
+    solicitante: p.solicitanteNombre,
+    ordenTrabajo: p.ordenTrabajo,
+    motivoUso: p.motivo,
+    fechaSolicitud: p.fechaSolicitud,
+    fechaAprobacion: p.fechaAprobacion,
+    aprobadoPor: p.aprobadorNombre,
+    firmaDigital:
+      p.aprobadorNombre && p.fechaAprobacion
+        ? `${p.aprobadorNombre} — ${p.fechaAprobacion.slice(0, 16).replace('T', ' ')}`
+        : undefined,
+    fechaSalida: p.fechaRetiro,
+    fechaDevolucionEstimada: p.fechaDevolucionEstimada ?? '',
+    fechaDevolucionReal: p.fechaDevolucionReal,
+    estadoDevolucion: mapEstadoDevolucion(p.estadoDevolucion),
+    fotoDevolucionUrl: p.fotografiaDanoUrl,
+    observacionDevolucion: p.observacionesDevolucion,
+    estado: mapEstadoToFrontend(p.estado),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Create DTO — matches backend CreatePrestamoDto
+// ---------------------------------------------------------------------------
+
+export interface CreatePrestamoData {
+  herramientaId: string;
+  herramientaNombre: string;
+  herramientaPlaca: string;
+  solicitanteId: string;
+  solicitanteNombre: string;
+  ordenTrabajo: string;
+  motivo: string;
+  tiempoEstimadoHoras: number;
+}
 
 // ---------------------------------------------------------------------------
 // Prestamos (SolicitudPrestamo)
@@ -15,98 +116,112 @@ import {
 export async function getPrestamos(
   estado?: EstadoSolicitudPrestamo,
 ): Promise<SolicitudPrestamo[]> {
-  const query = estado ? `?estado=${encodeURIComponent(estado)}` : '';
-  return httpClient.get<SolicitudPrestamo[]>(`/api/prestamos${query}`);
+  // Map frontend capitalized estado to backend lowercase
+  const backendEstado = estado?.toLowerCase();
+  const query = backendEstado ? `?estado=${encodeURIComponent(backendEstado)}` : '';
+  const raw = await httpClient.get<BackendPrestamo[]>(`/api/prestamos${query}`);
+  return raw.map(mapPrestamo);
 }
 
 export async function getPrestamoById(
   id: string,
 ): Promise<SolicitudPrestamo | undefined> {
-  return httpClient.get<SolicitudPrestamo>(`/api/prestamos/${id}`);
+  const raw = await httpClient.get<BackendPrestamo>(`/api/prestamos/${id}`);
+  return mapPrestamo(raw);
 }
 
 export async function getPrestamosByHerramienta(
   herramientaId: string,
 ): Promise<SolicitudPrestamo[]> {
-  return httpClient.get<SolicitudPrestamo[]>(
+  const raw = await httpClient.get<BackendPrestamo[]>(
     `/api/prestamos/herramienta/${herramientaId}`,
   );
+  return raw.map(mapPrestamo);
 }
 
-export async function createPrestamo(
-  data: Omit<SolicitudPrestamo, 'id'>,
-): Promise<SolicitudPrestamo> {
-  return httpClient.post<SolicitudPrestamo>('/api/prestamos', data);
+export async function createPrestamo(data: CreatePrestamoData): Promise<SolicitudPrestamo> {
+  const raw = await httpClient.post<BackendPrestamo>('/api/prestamos', data);
+  return mapPrestamo(raw);
 }
 
 export async function aprobarPrestamo(
   id: string,
-  aprobadoPor: string,
-  firmaDigital?: string,
+  aprobadorId: string,
+  aprobadorNombre: string,
 ): Promise<SolicitudPrestamo> {
-  return httpClient.patch<SolicitudPrestamo>(
+  const raw = await httpClient.patch<BackendPrestamo>(
     `/api/prestamos/${id}/aprobar`,
-    { aprobadoPor, firmaDigital },
+    { aprobadorId, aprobadorNombre },
   );
+  return mapPrestamo(raw);
 }
 
 export async function rechazarPrestamo(
   id: string,
-  motivo: string,
+  aprobadorId: string,
+  aprobadorNombre: string,
+  motivo?: string,
 ): Promise<SolicitudPrestamo> {
-  return httpClient.patch<SolicitudPrestamo>(
+  const raw = await httpClient.patch<BackendPrestamo>(
     `/api/prestamos/${id}/rechazar`,
-    { motivo },
+    { aprobadorId, aprobadorNombre, motivo },
   );
+  return mapPrestamo(raw);
 }
 
 export async function registrarDevolucion(
   id: string,
-  params: { estadoDevolucion: string; observacion?: string; fotoUrl?: string },
+  params: {
+    estadoDevolucion: 'bueno' | 'regular' | 'danado';
+    funcionCompleta: boolean;
+    accesoriosCompletos: boolean;
+    limpiezaAceptable: boolean;
+    observacionesDevolucion?: string;
+    fotografiaDanoUrl?: string;
+  },
 ): Promise<SolicitudPrestamo> {
-  return httpClient.patch<SolicitudPrestamo>(
+  const raw = await httpClient.patch<BackendPrestamo>(
     `/api/prestamos/${id}/devolucion`,
     params,
   );
+  return mapPrestamo(raw);
 }
 
 export async function registrarRetiro(id: string): Promise<SolicitudPrestamo> {
-  return httpClient.patch<SolicitudPrestamo>(
-    `/api/prestamos/${id}/retiro`,
-  );
+  const raw = await httpClient.patch<BackendPrestamo>(`/api/prestamos/${id}/retiro`);
+  return mapPrestamo(raw);
 }
 
 export async function registrarDano(
   id: string,
-  data: { descripcionDano: string; costoEstimado?: number; sancion?: string },
+  data: {
+    tipoDano: string;
+    sancion: 'descuento_nomina' | 'reposicion' | 'reparacion_compartida';
+    costoReparacion?: number;
+    costoReposicion?: number;
+    montoSancion?: number;
+  },
 ): Promise<SolicitudPrestamo> {
-  return httpClient.patch<SolicitudPrestamo>(
-    `/api/prestamos/${id}/dano`,
-    data,
-  );
+  const raw = await httpClient.patch<BackendPrestamo>(`/api/prestamos/${id}/dano`, data);
+  return mapPrestamo(raw);
 }
 
 export async function cerrarPrestamo(id: string): Promise<SolicitudPrestamo> {
-  return httpClient.patch<SolicitudPrestamo>(
-    `/api/prestamos/${id}/cerrar`,
-  );
+  const raw = await httpClient.patch<BackendPrestamo>(`/api/prestamos/${id}/cerrar`);
+  return mapPrestamo(raw);
 }
 
 // ---------------------------------------------------------------------------
 // Inspecciones Fotograficas
 // ---------------------------------------------------------------------------
 
-/**
- * Backend returns discrepancias as objects { descripcion, tipo, ... }
- * but the frontend InspeccionFotografica type expects string[].
- * This normalizer ensures the data always matches the frontend type.
- */
 function normalizeInspeccion(raw: unknown): InspeccionFotografica {
   const r = raw as Record<string, unknown>;
   const discArr = Array.isArray(r.discrepancias) ? r.discrepancias : [];
   const discStrings: string[] = discArr.map((d: unknown) => {
     if (typeof d === 'string') return d;
-    if (d && typeof d === 'object' && 'descripcion' in d) return (d as { descripcion: string }).descripcion;
+    if (d && typeof d === 'object' && 'descripcion' in d)
+      return (d as { descripcion: string }).descripcion;
     return String(d);
   });
   return {
@@ -143,10 +258,7 @@ export async function agregarFoto(
   id: string,
   data: { fotoUrl: string; descripcion?: string },
 ): Promise<InspeccionFotografica> {
-  return httpClient.patch<InspeccionFotografica>(
-    `/api/inspecciones/${id}/foto`,
-    data,
-  );
+  return httpClient.patch<InspeccionFotografica>(`/api/inspecciones/${id}/foto`, data);
 }
 
 export async function agregarDiscrepancia(
