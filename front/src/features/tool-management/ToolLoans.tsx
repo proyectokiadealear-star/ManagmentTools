@@ -27,6 +27,8 @@ import {
   aprobarPrestamo,
   rechazarPrestamo,
 } from '../../services/toolService';
+import { getPersonal, type Usuario } from '../../services/usuariosService';
+import { getAreas, type AreaAPI } from '../../services/assetService';
 
 const estadoBadge: Record<EstadoSolicitudPrestamo, { label: string; cls: string; icon: React.ReactNode }> = {
   Pendiente: { label: 'Pendiente', cls: 'bg-amber-100 text-amber-800 border-amber-200', icon: <Clock size={12} /> },
@@ -42,6 +44,8 @@ export function ToolLoans() {
   const { user } = useAuth();
 
   const [prestamos, setPrestamos] = useState<SolicitudPrestamo[]>([]);
+  const [personalList, setPersonalList] = useState<Usuario[]>([]);
+  const [areasCatalog, setAreasCatalog] = useState<AreaAPI[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -56,10 +60,13 @@ export function ToolLoans() {
   // Formulario nueva solicitud (F8.1)
   const [formSolicitud, setFormSolicitud] = useState({
     assetId: '',
+    areaTaller: '',
+    personalId: '',
     ordenTrabajo: '',
     motivoUso: '',
     tiempoEstimadoHoras: '',
   });
+  const [formSolicitudErrors, setFormSolicitudErrors] = useState<{ personalId?: string }>({});
 
   // Formulario aprobación (F8.2)
   const [formAprobacion, setFormAprobacion] = useState({ aprobar: true, motivoRechazo: '' });
@@ -79,6 +86,28 @@ export function ToolLoans() {
   useEffect(() => {
     reloadPrestamos();
   }, [reloadPrestamos]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPersonal()
+      .then((data) => {
+        if (!cancelled) setPersonalList(data);
+      })
+      .catch(() => {
+        if (!cancelled) setErrorMsg('No se pudo cargar la lista del personal. Intenta nuevamente.');
+      });
+    
+    getAreas()
+      .then((data) => {
+        if (!cancelled) setAreasCatalog(data);
+      })
+      .catch(() => {
+        console.error('No se pudo cargar el catálogo de áreas');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
@@ -100,6 +129,11 @@ export function ToolLoans() {
 
   const handleCrearSolicitud = async () => {
     const horas = Number(formSolicitud.tiempoEstimadoHoras);
+    if (!formSolicitud.personalId) {
+      setFormSolicitudErrors({ personalId: 'Debe seleccionar a quien se le presta la herramienta.' });
+      return;
+    }
+    setFormSolicitudErrors({});
     if (
       !formSolicitud.assetId ||
       !formSolicitud.ordenTrabajo ||
@@ -110,6 +144,11 @@ export function ToolLoans() {
 
     const asset = assets.find((a) => a.id === formSolicitud.assetId);
     if (!asset) return;
+    const personal = personalList.find((t) => t.id === formSolicitud.personalId);
+    if (!personal) {
+      setErrorMsg('El personal seleccionado no es válido. Vuelve a seleccionarlo.');
+      return;
+    }
 
     setSubmitting(true);
     setErrorMsg('');
@@ -120,11 +159,14 @@ export function ToolLoans() {
         herramientaPlaca: asset.placa,
         solicitanteId: user.uid,
         solicitanteNombre: user.nombre,
+        asesorId: personal.id,
+        asesorNombre: personal.nombre,
         ordenTrabajo: formSolicitud.ordenTrabajo,
         motivo: formSolicitud.motivoUso,
         tiempoEstimadoHoras: horas,
       });
-      setFormSolicitud({ assetId: '', ordenTrabajo: '', motivoUso: '', tiempoEstimadoHoras: '' });
+      setFormSolicitud({ assetId: '', areaTaller: '', personalId: '', ordenTrabajo: '', motivoUso: '', tiempoEstimadoHoras: '' });
+      setFormSolicitudErrors({});
       setShowSolicitudModal(false);
       showSuccess('Solicitud enviada correctamente. Pendiente de aprobación.');
       await reloadPrestamos();
@@ -173,6 +215,7 @@ export function ToolLoans() {
 
   const solicitudFormValida =
     !!formSolicitud.assetId &&
+    !!formSolicitud.personalId &&
     !!formSolicitud.ordenTrabajo &&
     !!formSolicitud.motivoUso &&
     Number(formSolicitud.tiempoEstimadoHoras) > 0;
@@ -433,6 +476,26 @@ export function ToolLoans() {
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Área del Taller (Filtro)
+                </label>
+                <select
+                  value={formSolicitud.areaTaller}
+                  onChange={(e) => {
+                    setFormSolicitud((f) => ({ ...f, areaTaller: e.target.value, personalId: '', assetId: '' }));
+                    setFormSolicitudErrors((prev) => ({ ...prev, personalId: undefined }));
+                  }}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                >
+                  <option value="">Todas las áreas</option>
+                  {areasCatalog.map((area) => (
+                    <option key={area.id} value={area.id}>
+                      {area.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
                   Herramienta / Activo *
                 </label>
                 <select
@@ -441,12 +504,43 @@ export function ToolLoans() {
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
                 >
                   <option value="">Seleccionar herramienta...</option>
-                  {assets.map((a) => (
+                  {(formSolicitud.areaTaller ? assets.filter(a => a.area === formSolicitud.areaTaller) : assets).map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.descripcion} ({a.placa})
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  A quien se le presta *
+                </label>
+                <select
+                  value={formSolicitud.personalId}
+                  onChange={(e) => {
+                    setFormSolicitud((f) => ({ ...f, personalId: e.target.value }));
+                    setFormSolicitudErrors((prev) => ({ ...prev, personalId: undefined }));
+                  }}
+                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                    formSolicitudErrors.personalId ? 'border-red-300' : 'border-slate-200'
+                  }`}
+                >
+                  <option value="">Seleccionar personal...</option>
+                  {(() => {
+                    const selectedAreaObj = areasCatalog.find(a => a.id === formSolicitud.areaTaller);
+                    const list = formSolicitud.areaTaller && selectedAreaObj
+                      ? personalList.filter(p => p.area === (selectedAreaObj.tipo ?? selectedAreaObj.nombre) || p.area === selectedAreaObj.nombre)
+                      : personalList;
+                    return list.map((persona) => (
+                      <option key={persona.id} value={persona.id}>
+                        {persona.nombre}
+                      </option>
+                    ));
+                  })()}
+                </select>
+                {formSolicitudErrors.personalId && (
+                  <p className="text-xs text-red-500 mt-1">{formSolicitudErrors.personalId}</p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">
@@ -495,7 +589,11 @@ export function ToolLoans() {
 
             <div className="p-6 border-t border-slate-100 flex justify-end gap-3">
               <button
-                onClick={() => { setShowSolicitudModal(false); setErrorMsg(''); }}
+                onClick={() => {
+                  setShowSolicitudModal(false);
+                  setErrorMsg('');
+                  setFormSolicitudErrors({});
+                }}
                 disabled={submitting}
                 className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
               >

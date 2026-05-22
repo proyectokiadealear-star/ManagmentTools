@@ -20,6 +20,8 @@ interface BackendPrestamo {
   herramientaPlaca: string;
   solicitanteId: string;
   solicitanteNombre: string;
+  asesorId?: string;
+  asesorNombre?: string;
   ordenTrabajo: string;
   motivo: string;
   tiempoEstimadoHoras: number;
@@ -75,6 +77,8 @@ function mapPrestamo(p: BackendPrestamo): SolicitudPrestamo {
     assetDescripcion: p.herramientaNombre,
     assetPlaca: p.herramientaPlaca,
     solicitante: p.solicitanteNombre,
+    asesorId: p.asesorId,
+    asesorNombre: p.asesorNombre,
     ordenTrabajo: p.ordenTrabajo,
     motivoUso: p.motivo,
     fechaSolicitud: p.fechaSolicitud,
@@ -104,6 +108,8 @@ export interface CreatePrestamoData {
   herramientaPlaca: string;
   solicitanteId: string;
   solicitanteNombre: string;
+  asesorId: string;
+  asesorNombre: string;
   ordenTrabajo: string;
   motivo: string;
   tiempoEstimadoHoras: number;

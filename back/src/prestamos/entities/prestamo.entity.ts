@@ -8,6 +8,8 @@ export interface Prestamo {
   herramientaPlaca: string;
   solicitanteId: string;
   solicitanteNombre: string;
+  asesorId?: string;
+  asesorNombre?: string;
   ordenTrabajo: string; // OT vinculada
   motivo: string;
   tiempoEstimadoHoras: number;

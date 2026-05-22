@@ -164,6 +164,8 @@ export interface SolicitudPrestamo {
   assetDescripcion: string;
   assetPlaca: string;
   solicitante: string;
+  asesorId?: string;
+  asesorNombre?: string;
   ordenTrabajo: string;
   motivoUso: string;
   fechaSolicitud: string;

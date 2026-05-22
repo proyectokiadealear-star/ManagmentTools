@@ -51,6 +51,16 @@ export async function getUsuariosAsignables(): Promise<Usuario[]> {
   return usuarios.filter(isAssignableUser);
 }
 
+export async function getAsesores(): Promise<Usuario[]> {
+  const usuarios = await getUsuarios();
+  return usuarios.filter((u) => u.activo && u.area === AreaTaller.RECEPCION);
+}
+
+export async function getPersonal(): Promise<Usuario[]> {
+  const usuarios = await getUsuarios();
+  return usuarios.filter((u) => u.activo && u.rol === 'personal');
+}
+
 export async function getUsuario(id: string): Promise<Usuario> {
   return httpClient.get<Usuario>(`${BASE}/${id}`);
 }

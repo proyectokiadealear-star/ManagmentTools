@@ -23,6 +23,14 @@ export class CreatePrestamoDto {
   @IsString()
   solicitanteNombre: string;
 
+  @ApiProperty({ example: 'USR-ASE-001', description: 'ID del asesor a quien se le presta' })
+  @IsString()
+  asesorId: string;
+
+  @ApiProperty({ example: 'Andrea Paredes', description: 'Nombre del asesor a quien se le presta' })
+  @IsString()
+  asesorNombre: string;
+
   @ApiProperty({ example: 'OT-2025-0042', description: 'Orden de trabajo vinculada' })
   @IsString()
   ordenTrabajo: string;
