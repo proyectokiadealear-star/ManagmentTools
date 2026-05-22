@@ -156,21 +156,41 @@ export function MaterialConsumption() {
     return () => { cancelled = true; };
   }, []);
 
-  // ── Form state ───────────────────────────────────────────────────────────────
+  // ── Form state (Master-Detail) ───────────────────────────────────────────────
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ ordenTrabajo: '', insumoId: '', tecnicoId: '', cantidad: '', justificacion: '' });
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [formMaster, setFormMaster] = useState({ 
+    ordenTrabajo: '', 
+    tecnicoId: '', 
+    tecnicoSearchQuery: '', 
+    tecnicoDropdownOpen: false 
+  });
+  
+  interface ConsumoRow {
+    id: string;
+    insumoId: string;
+    unidadLocal: string;
+    cantidad: string;
+    justificacion: string;
+    searchQuery: string;
+    dropdownOpen: boolean;
+  }
+  
+  const createEmptyRow = (): ConsumoRow => ({
+    id: crypto.randomUUID(),
+    insumoId: '',
+    unidadLocal: '',
+    cantidad: '',
+    justificacion: '',
+    searchQuery: '',
+    dropdownOpen: false
+  });
+
+  const [formRows, setFormRows] = useState<ConsumoRow[]>([createEmptyRow()]);
+  const [formMasterErrors, setFormMasterErrors] = useState<Record<string, string>>({});
+  const [formRowsErrors, setFormRowsErrors] = useState<Record<string, Record<string, string>>>({});
+  
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
-
-  const selectedInsumo = catalogo.find(i => i.id === form.insumoId) ?? null;
-  const selectedTecnico = usuariosAsignables.find(u => u.id === form.tecnicoId) ?? null;
-  const cantidadNum = Number(form.cantidad);
-  const desviacionPreview = selectedInsumo && cantidadNum > 0 && selectedInsumo.consumoPromedioPorOT > 0
-    ? Math.abs((cantidadNum - selectedInsumo.consumoPromedioPorOT) / selectedInsumo.consumoPromedioPorOT)
-    : 0;
-  const requiereJustificacion = desviacionPreview > 0.2;
-  const costoPreview = selectedInsumo && cantidadNum > 0 ? cantidadNum * selectedInsumo.costoUnitario : null;
 
   // ── Derived analytics ─────────────────────────────────────────────────────
 
@@ -236,45 +256,125 @@ export function MaterialConsumption() {
   const anomalyCount = materialAnomalies.length + technicianAnomalies.length;
 
   // ── Handlers ──────────────────────────────────────────────────────────────
+  
+  function getCantidadConvertida(cantidadLocal: number, unidadLocal: string, insumoBase?: string) {
+    const isBaseLiquid = ['litros', 'litro', 'galones', 'galon', 'tazas', 'taza', 'tapas', 'tapa'].includes(insumoBase?.toLowerCase() || '');
+    if (!isBaseLiquid) return cantidadLocal;
+
+    // 1. Convert to Litros based on selected unit
+    let inLitros = cantidadLocal;
+    if (unidadLocal === 'galones') inLitros = cantidadLocal * 3.785;
+    if (unidadLocal === 'tazas' || unidadLocal === 'tapas') inLitros = cantidadLocal * 0.2366;
+    
+    // 2. Convert Litros to the base unit of the Insumo
+    const base = insumoBase?.toLowerCase() || '';
+    if (base === 'galones' || base === 'galon') return inLitros / 3.785;
+    if (base === 'tazas' || base === 'taza' || base === 'tapas' || base === 'tapa') return inLitros / 0.2366;
+    
+    return inLitros; // default is litros
+  }
 
   function resetForm() {
-    setForm({ ordenTrabajo: '', insumoId: '', tecnicoId: '', cantidad: '', justificacion: '' });
-    setFormErrors({});
+    setFormMaster({ ordenTrabajo: '', tecnicoId: '', tecnicoSearchQuery: '', tecnicoDropdownOpen: false });
+    setFormRows([createEmptyRow()]);
+    setFormMasterErrors({});
+    setFormRowsErrors({});
     setSaveError('');
+  }
+
+  function addRow() {
+    setFormRows(prev => [...prev, createEmptyRow()]);
+  }
+
+  function removeRow(id: string) {
+    if (formRows.length === 1) {
+      setFormRows([createEmptyRow()]);
+      setFormRowsErrors({});
+    } else {
+      setFormRows(prev => prev.filter(r => r.id !== id));
+      setFormRowsErrors(prev => {
+        const newErrs = { ...prev };
+        delete newErrs[id];
+        return newErrs;
+      });
+    }
+  }
+
+  function updateRow(id: string, updates: Partial<ConsumoRow>) {
+    setFormRows(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
   }
 
   function validateForm() {
-    const errors: Record<string, string> = {};
-    if (!form.ordenTrabajo.trim()) errors.ordenTrabajo = 'Número de OT requerido';
-    if (!form.insumoId) errors.insumoId = 'Seleccione un insumo del catálogo';
-    if (!form.tecnicoId) errors.tecnicoId = 'Seleccione un usuario';
-    if (!form.cantidad || cantidadNum <= 0) errors.cantidad = 'Ingrese una cantidad mayor a 0';
-    if (requiereJustificacion && !form.justificacion.trim())
-      errors.justificacion = 'Se requiere justificación cuando la cantidad se desvía más del 20%';
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    let isValid = true;
+    const mErrors: Record<string, string> = {};
+    if (!formMaster.ordenTrabajo.trim()) { mErrors.ordenTrabajo = 'Requerido'; isValid = false; }
+    if (!formMaster.tecnicoId) { mErrors.tecnicoId = 'Requerido'; isValid = false; }
+    setFormMasterErrors(mErrors);
+
+    const rErrors: Record<string, Record<string, string>> = {};
+    formRows.forEach(row => {
+      const errs: Record<string, string> = {};
+      const insumo = catalogo.find(i => i.id === row.insumoId);
+      
+      if (!row.insumoId) errs.insumoId = 'Seleccione insumo';
+      const qty = Number(row.cantidad);
+      if (!row.cantidad || qty <= 0) errs.cantidad = 'Mínimo 0.01';
+      
+      if (insumo) {
+        const qtyConvertida = getCantidadConvertida(qty, row.unidadLocal, insumo.unidadMedida);
+        const desviacion = insumo.consumoPromedioPorOT > 0 
+          ? Math.abs((qtyConvertida - insumo.consumoPromedioPorOT) / insumo.consumoPromedioPorOT) 
+          : 0;
+        if (desviacion > 0.2 && !row.justificacion.trim()) {
+          errs.justificacion = 'Requiere justificación (>20% desv.)';
+        }
+      }
+      
+      if (Object.keys(errs).length > 0) {
+        rErrors[row.id] = errs;
+        isValid = false;
+      }
+    });
+    setFormRowsErrors(rErrors);
+    
+    return isValid;
   }
 
   async function handleSave() {
-    if (!validateForm() || !selectedInsumo || !selectedTecnico) return;
+    if (!validateForm()) return;
     setSaveError('');
-    const payload: RegistrarConsumoPayload = {
-      ordenTrabajoId: form.ordenTrabajo.trim(),
-      insumoId: selectedInsumo.id,
-      cantidad: cantidadNum,
-      tecnicoId: selectedTecnico.id,
-      tecnicoNombre: selectedTecnico.nombre,
-      areaId: selectedTecnico.area,
-      ...(form.justificacion.trim() && { justificacion: form.justificacion.trim() }),
-    };
     setSaving(true);
+    
+    const tecnico = usuariosAsignables.find(u => u.id === formMaster.tecnicoId);
+    if (!tecnico) {
+      setSaving(false);
+      return;
+    }
+
     try {
-      const created = await createConsumo(payload);
-      setConsumos(prev => [created, ...prev]);
+      const payloads: RegistrarConsumoPayload[] = formRows.map(row => {
+        const insumo = catalogo.find(i => i.id === row.insumoId)!;
+        const qtyConvertida = getCantidadConvertida(Number(row.cantidad), row.unidadLocal, insumo.unidadMedida);
+        
+        return {
+          ordenTrabajoId: formMaster.ordenTrabajo.trim(),
+          insumoId: insumo.id,
+          cantidad: qtyConvertida,
+          tecnicoId: tecnico.id,
+          tecnicoNombre: tecnico.nombre,
+          areaId: tecnico.area,
+          ...(row.justificacion.trim() && { justificacion: row.justificacion.trim() })
+        };
+      });
+
+      // Execute all inserts concurrently
+      const createdConsumos = await Promise.all(payloads.map(p => createConsumo(p)));
+      
+      setConsumos(prev => [...createdConsumos, ...prev]);
       setShowModal(false);
       resetForm();
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'No se pudo guardar el consumo');
+      setSaveError(err instanceof Error ? err.message : 'No se pudieron guardar algunos consumos.');
     } finally {
       setSaving(false);
     }
@@ -521,131 +621,253 @@ export function MaterialConsumption() {
         </div>
       </section>
 
-      {/* ── Modal Registro ── */}
+      {/* ── Modal Registro (Master-Detail) ── */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-bold text-gray-800">Registrar Consumo de Insumo</h3>
+              <h3 className="text-lg font-bold text-gray-800">Registrar Múltiples Insumos (Por OT)</h3>
               <button onClick={() => { setShowModal(false); resetForm(); }} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
             </div>
-            <div className="px-6 py-4 space-y-4 overflow-y-auto flex-1">
+            
+            <div className="px-6 py-4 space-y-6 overflow-y-auto flex-1">
               {saveError && (
                 <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">{saveError}</div>
               )}
               {catalogo.length === 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-700">
-                  No hay insumos en el catálogo. Agregue insumos primero.
+                  No hay insumos en el catálogo.
                 </div>
               )}
 
-              {/* OT */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Número de OT <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={form.ordenTrabajo}
-                  onChange={e => setForm(f => ({ ...f, ordenTrabajo: e.target.value }))}
-                  placeholder="Ej: OT-2025-0210"
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 ${formErrors.ordenTrabajo ? 'border-red-400' : 'border-gray-300'}`}
-                />
-                {formErrors.ordenTrabajo && <p className="text-xs text-red-500 mt-1">{formErrors.ordenTrabajo}</p>}
+              {/* Master: OT y Técnico */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Número de OT <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formMaster.ordenTrabajo}
+                    onChange={e => setFormMaster(f => ({ ...f, ordenTrabajo: e.target.value }))}
+                    placeholder="Ej: OT-2025-0210"
+                    className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 ${formMasterErrors.ordenTrabajo ? 'border-red-400' : 'border-gray-300'}`}
+                  />
+                  {formMasterErrors.ordenTrabajo && <p className="text-xs text-red-500 mt-1">{formMasterErrors.ordenTrabajo}</p>}
+                </div>
+                <div className="relative z-20">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Técnico Líder <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={formMaster.tecnicoDropdownOpen ? formMaster.tecnicoSearchQuery : (usuariosAsignables.find(u => u.id === formMaster.tecnicoId)?.nombre || '')}
+                      onChange={e => setFormMaster(f => ({ ...f, tecnicoSearchQuery: e.target.value, tecnicoDropdownOpen: true }))}
+                      onFocus={() => setFormMaster(f => ({ ...f, tecnicoDropdownOpen: true, tecnicoSearchQuery: '' }))}
+                      placeholder="Buscar técnico..."
+                      className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 ${formMasterErrors.tecnicoId ? 'border-red-400' : 'border-gray-300'}`}
+                    />
+                    {formMaster.tecnicoDropdownOpen && (
+                      <div className="absolute z-30 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                        {(() => {
+                          const filtrados = formMaster.tecnicoSearchQuery 
+                            ? usuariosAsignables.filter(u => u.nombre.toLowerCase().includes(formMaster.tecnicoSearchQuery.toLowerCase()))
+                            : usuariosAsignables;
+                            
+                          if (filtrados.length === 0) {
+                            return <div className="px-3 py-2 text-sm text-gray-500">Sin resultados</div>;
+                          }
+                          return filtrados.map(u => (
+                            <div
+                              key={u.id}
+                              onClick={() => setFormMaster(f => ({ ...f, tecnicoId: u.id, tecnicoDropdownOpen: false, tecnicoSearchQuery: u.nombre }))}
+                              className="px-3 py-2 text-sm hover:bg-amber-50 cursor-pointer border-b border-gray-50 last:border-0 flex items-center justify-between"
+                            >
+                              <span className="font-medium">{u.nombre}</span>
+                              <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-500">{u.rol}</span>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                  {formMaster.tecnicoDropdownOpen && (
+                    <div className="fixed inset-0 z-10" onClick={() => setFormMaster(f => ({ ...f, tecnicoDropdownOpen: false }))} />
+                  )}
+                  {formMasterErrors.tecnicoId && <p className="text-xs text-red-500 mt-1">{formMasterErrors.tecnicoId}</p>}
+                </div>
               </div>
 
-              {/* Insumo */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Insumo <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={form.insumoId}
-                  onChange={e => setForm(f => ({ ...f, insumoId: e.target.value }))}
-                  className={`w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 ${formErrors.insumoId ? 'border-red-400' : 'border-gray-300'}`}
-                >
-                  <option value="">Seleccionar insumo del catálogo…</option>
-                  {catalogo.map(i => (
-                    <option key={i.id} value={i.id}>
-                      {i.nombre} ({i.unidadMedida}) — ${i.costoUnitario}/{i.unidadMedida}
-                    </option>
-                  ))}
-                </select>
-                {formErrors.insumoId && <p className="text-xs text-red-500 mt-1">{formErrors.insumoId}</p>}
-                {selectedInsumo && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Promedio por OT: <strong>{selectedInsumo.consumoPromedioPorOT} {selectedInsumo.unidadMedida}</strong>
-                    {selectedInsumo.stockActual != null && <> · Stock: <strong>{selectedInsumo.stockActual}</strong></>}
-                  </p>
-                )}
+              {/* Detail: Insumos */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold text-gray-700">Insumos a registrar</h4>
+                  <button onClick={addRow} className="text-xs font-semibold text-amber-600 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
+                    <PlusCircle size={14} /> Añadir fila
+                  </button>
+                </div>
+                
+                {formRows.map((row) => {
+                  const errs = formRowsErrors[row.id] || {};
+                  const insumo = catalogo.find(i => i.id === row.insumoId);
+                  
+                  // Combobox search logic
+                  const filteredCatalogo = row.searchQuery 
+                    ? catalogo.filter(i => i.nombre.toLowerCase().includes(row.searchQuery.toLowerCase()) || i.codigo.toLowerCase().includes(row.searchQuery.toLowerCase()))
+                    : catalogo;
+
+                  // Desviación
+                  let desviacionPreview = 0;
+                  if (insumo && Number(row.cantidad) > 0 && insumo.consumoPromedioPorOT > 0) {
+                    const qtyConvertida = getCantidadConvertida(Number(row.cantidad), row.unidadLocal || insumo.unidadMedida, insumo.unidadMedida);
+                    desviacionPreview = Math.abs((qtyConvertida - insumo.consumoPromedioPorOT) / insumo.consumoPromedioPorOT);
+                  }
+                  
+                  let totalLine = 0;
+                  if (insumo && Number(row.cantidad) > 0) {
+                    const qtyConvertida = getCantidadConvertida(Number(row.cantidad), row.unidadLocal || insumo.unidadMedida, insumo.unidadMedida);
+                    totalLine = qtyConvertida * insumo.costoUnitario;
+                  }
+
+                  return (
+                    <div key={row.id} className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm space-y-3 relative">
+                      <div className="absolute top-3 right-3">
+                        <button onClick={() => removeRow(row.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Eliminar fila">
+                          <X size={16} />
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-12 gap-3 pr-6">
+                        
+                        {/* Buscador de Insumo (Combobox) */}
+                        <div className="col-span-12 md:col-span-5 relative">
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Insumo</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={row.dropdownOpen ? row.searchQuery : (insumo?.nombre || '')}
+                              onChange={e => updateRow(row.id, { searchQuery: e.target.value, dropdownOpen: true })}
+                              onFocus={() => updateRow(row.id, { dropdownOpen: true, searchQuery: '' })}
+                              placeholder="Buscar insumo..."
+                              className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 ${errs.insumoId ? 'border-red-400' : 'border-gray-300'}`}
+                            />
+                            {row.dropdownOpen && (
+                              <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                {filteredCatalogo.length === 0 ? (
+                                  <div className="px-3 py-2 text-sm text-gray-500">Sin resultados</div>
+                                ) : (
+                                  filteredCatalogo.map(i => (
+                                    <div
+                                      key={i.id}
+                                      onClick={() => updateRow(row.id, { insumoId: i.id, dropdownOpen: false, searchQuery: i.nombre, unidadLocal: i.unidadMedida })}
+                                      className="px-3 py-2 text-sm hover:bg-amber-50 cursor-pointer border-b border-gray-50 last:border-0 group"
+                                    >
+                                      <div className="font-medium text-gray-800 group-hover:text-amber-700 transition-colors">{i.nombre}</div>
+                                      <div className="flex items-center justify-between mt-0.5">
+                                        <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{i.codigo}</span>
+                                        <span className="text-[10px] font-semibold text-gray-500">{i.unidadMedida} · ${fmt(i.costoUnitario)}</span>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          {/* Invisible backdrop to close dropdown */}
+                          {row.dropdownOpen && (
+                            <div className="fixed inset-0 z-0" onClick={() => updateRow(row.id, { dropdownOpen: false })} />
+                          )}
+                          {errs.insumoId && <p className="text-xs text-red-500 mt-1">{errs.insumoId}</p>}
+                        </div>
+
+                        {/* Cantidad y Unidad */}
+                        <div className="col-span-6 md:col-span-3">
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Cantidad</label>
+                          <div className="flex border rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-amber-400">
+                            <input
+                              type="number"
+                              min="0.01" step="0.01"
+                              value={row.cantidad}
+                              onChange={e => updateRow(row.id, { cantidad: e.target.value })}
+                              placeholder="0.00"
+                              className="w-1/2 px-2 py-2 text-sm focus:outline-none"
+                            />
+                            <select
+                              value={row.unidadLocal || (insumo?.unidadMedida ?? '')}
+                              onChange={e => updateRow(row.id, { unidadLocal: e.target.value })}
+                              disabled={!insumo}
+                              className="w-1/2 bg-gray-50 px-1 py-2 text-xs border-l focus:outline-none text-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              {insumo ? (
+                                ['litros', 'litro', 'galones', 'galon', 'tazas', 'taza', 'tapas', 'tapa'].includes(insumo.unidadMedida?.trim().toLowerCase() || '') ? (
+                                  <>
+                                    <option value="litros">Litros</option>
+                                    <option value="tazas">Tazas</option>
+                                    <option value="galones">Galones</option>
+                                  </>
+                                ) : (
+                                  <option value={insumo.unidadMedida || ''}>{insumo.unidadMedida || 'Unidad'}</option>
+                                )
+                              ) : (
+                                <option value="">Sel. Insumo</option>
+                              )}
+                            </select>
+                          </div>
+                          {errs.cantidad && <p className="text-xs text-red-500 mt-1">{errs.cantidad}</p>}
+                        </div>
+
+                        {/* Costo Info */}
+                        <div className="col-span-6 md:col-span-4 flex items-end justify-end pb-1">
+                          <div className="text-right">
+                            <p className="text-[10px] text-gray-400 uppercase">Costo Estimado</p>
+                            <p className="text-lg font-bold text-gray-700">${fmt(totalLine)}</p>
+                          </div>
+                        </div>
+
+                        {/* Justificación if needed */}
+                        <div className="col-span-12">
+                          {(desviacionPreview > 0.2 || errs.justificacion) && (
+                            <div className="flex gap-2 items-start mt-2">
+                              <AlertTriangle className="text-amber-500 shrink-0 mt-1" size={16} />
+                              <div className="flex-1">
+                                <textarea
+                                  value={row.justificacion}
+                                  onChange={e => updateRow(row.id, { justificacion: e.target.value })}
+                                  placeholder="Justificación requerida (desviación > 20%)"
+                                  rows={1}
+                                  className={`w-full text-xs border rounded-lg px-3 py-1.5 focus:outline-none resize-none ${errs.justificacion ? 'border-red-400 bg-red-50' : 'border-amber-200 bg-amber-50'}`}
+                                />
+                                {errs.justificacion && <p className="text-[10px] text-red-500 font-medium">{errs.justificacion}</p>}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
-              {/* Técnico */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Usuario asignable <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={form.tecnicoId}
-                  onChange={e => setForm(f => ({ ...f, tecnicoId: e.target.value }))}
-                  className={`w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 ${formErrors.tecnicoId ? 'border-red-400' : 'border-gray-300'}`}
-                >
-                  <option value="">Seleccionar usuario…</option>
-                  {usuariosAsignables.map(u => (
-                    <option key={u.id} value={u.id}>{u.nombre} — {u.rol}</option>
-                  ))}
-                </select>
-                {formErrors.tecnicoId && <p className="text-xs text-red-500 mt-1">{formErrors.tecnicoId}</p>}
-              </div>
-
-              {/* Cantidad */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Cantidad{selectedInsumo ? ` (${selectedInsumo.unidadMedida})` : ''} <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={form.cantidad}
-                  onChange={e => setForm(f => ({ ...f, cantidad: e.target.value }))}
-                  placeholder="0.00"
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 ${formErrors.cantidad ? 'border-red-400' : 'border-gray-300'}`}
-                />
-                {formErrors.cantidad && <p className="text-xs text-red-500 mt-1">{formErrors.cantidad}</p>}
-                {selectedInsumo && requiereJustificacion && (
-                  <p className="text-xs text-amber-700 mt-1">
-                    Desviación &gt;20% del promedio — se requiere justificación.
-                  </p>
-                )}
-              </div>
-
-              {/* Justificación */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Justificación {requiereJustificacion && <span className="text-red-500">*</span>}
-                </label>
-                <textarea
-                  value={form.justificacion}
-                  onChange={e => setForm(f => ({ ...f, justificacion: e.target.value }))}
-                  placeholder="Explique el motivo si el consumo supera la tolerancia"
-                  rows={2}
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none ${formErrors.justificacion ? 'border-red-400' : 'border-gray-300'}`}
-                />
-                {formErrors.justificacion && <p className="text-xs text-red-500 mt-1">{formErrors.justificacion}</p>}
-              </div>
-
-              {/* Costo preview */}
-              {costoPreview !== null && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-center justify-between">
-                  <span className="text-sm font-medium text-amber-800">Costo Total Estimado</span>
-                  <span className="text-lg font-bold text-amber-700">${fmt(costoPreview)}</span>
+              {/* Total Summary */}
+              {formRows.some(r => r.insumoId && Number(r.cantidad) > 0) && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-amber-800">Costo Total de la OT</span>
+                  <span className="text-xl font-bold text-amber-700">
+                    ${fmt(formRows.reduce((sum, row) => {
+                      const ins = catalogo.find(i => i.id === row.insumoId);
+                      if (!ins) return sum;
+                      const q = getCantidadConvertida(Number(row.cantidad) || 0, row.unidadLocal || ins.unidadMedida, ins.unidadMedida);
+                      return sum + (q * ins.costoUnitario);
+                    }, 0))}
+                  </span>
                 </div>
               )}
+
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200">
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-white">
               <button
                 onClick={() => { setShowModal(false); resetForm(); }}
                 className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
@@ -654,11 +876,11 @@ export function MaterialConsumption() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving}
-                className="px-5 py-2 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded-lg disabled:opacity-50 flex items-center gap-2"
+                disabled={saving || catalogo.length === 0}
+                className="px-6 py-2 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded-lg disabled:opacity-50 flex items-center gap-2"
               >
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                {saving ? 'Guardando…' : 'Guardar Registro'}
+                {saving ? 'Guardando OT…' : 'Registrar Insumos'}
               </button>
             </div>
           </div>

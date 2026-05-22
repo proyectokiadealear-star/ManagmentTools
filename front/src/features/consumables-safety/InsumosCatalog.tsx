@@ -12,7 +12,7 @@ import {
 // ─── Opciones fijas ────────────────────────────────────────────────────────
 
 const TIPOS = ['lubricante', 'filtro', 'pintura', 'barniz', 'lija', 'masking', 'refrigerante', 'frenos', 'eléctrico', 'otro'];
-const UNIDADES = ['litros', 'galones', 'unidades', 'pares', 'rollos', 'metros', 'kg'];
+const UNIDADES = ['litros', 'galones', 'tazas', 'tapas', 'unidades', 'pares', 'rollos', 'metros', 'kg'];
 
 // ─── Formulario en blanco ─────────────────────────────────────────────────
 
@@ -28,6 +28,31 @@ const BLANK_FORM = {
 };
 
 type FormState = typeof BLANK_FORM;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
+
+function StockBadge({ item }: { item: CatalogoInsumo }) {
+  if (item.stockActual == null) return <span className="text-gray-400 text-xs">—</span>;
+  const low = item.stockMinimo != null && item.stockActual < item.stockMinimo;
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
+      low ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'
+    }`}>
+      {low ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />}
+      {item.stockActual} {item.unidadMedida}
+    </span>
+  );
+}
+
+function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      {children}
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+    </div>
+  );
+}
 
 // ─── Component ────────────────────────────────────────────────────────────
 
@@ -140,33 +165,6 @@ export function InsumosCatalog() {
     } finally {
       setSaving(false);
     }
-  }
-
-  // ── Stock badge ─────────────────────────────────────────────────────────
-
-  function StockBadge({ item }: { item: CatalogoInsumo }) {
-    if (item.stockActual == null) return <span className="text-gray-400 text-xs">—</span>;
-    const low = item.stockMinimo != null && item.stockActual < item.stockMinimo;
-    return (
-      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
-        low ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'
-      }`}>
-        {low ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />}
-        {item.stockActual} {item.unidadMedida}
-      </span>
-    );
-  }
-
-  // ── Field helper ────────────────────────────────────────────────────────
-
-  function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
-    return (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-        {children}
-        {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-      </div>
-    );
   }
 
   const inputCls = (err?: string) =>
